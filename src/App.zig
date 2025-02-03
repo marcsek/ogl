@@ -1,6 +1,11 @@
 const std = @import("std");
 const gl = @import("gl");
 const glfw = @import("mach-glfw");
+const vb = @import("VertexBuffer.zig");
+const ib = @import("IndexBuffer.zig");
+const va = @import("VertexArray.zig");
+const vbl = @import("VertexBufferLayout.zig");
+const Shader = @import("Shader.zig");
 
 var gl_procs: gl.ProcTable = undefined;
 
@@ -25,6 +30,7 @@ pub fn init(allocator: std.mem.Allocator) !App {
         .context_version_minor = gl.info.version_minor,
         .opengl_profile = .opengl_core_profile,
         .opengl_forward_compat = true,
+        .context_debug = true,
     }) orelse return error.InitFailed;
 
     errdefer window.destroy();
@@ -38,7 +44,18 @@ pub fn init(allocator: std.mem.Allocator) !App {
     gl.makeProcTableCurrent(&gl_procs);
     errdefer gl.makeProcTableCurrent(null);
 
+    glfw.swapInterval(1);
     window.setFramebufferSizeCallback(frameBufferSizeCallback);
+
+    // Debug callback setup
+    var flags: c_int = undefined;
+    gl.GetIntegerv(gl.CONTEXT_FLAGS, @ptrCast(&flags));
+    if (flags != gl.FALSE and gl.CONTEXT_FLAG_DEBUG_BIT != 0) {
+        gl.Enable(gl.DEBUG_OUTPUT);
+        gl.Enable(gl.DEBUG_OUTPUT_SYNCHRONOUS);
+        gl.DebugMessageCallback(glDebugOutput, null);
+        gl.DebugMessageControl(gl.DONT_CARE, gl.DONT_CARE, gl.DONT_CARE, 0, null, gl.TRUE);
+    }
 
     std.debug.print("OpenGL version: {s}\n", .{gl.GetString(gl.VERSION) orelse ""});
 
@@ -49,39 +66,30 @@ const position = [_]f32{ -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5 };
 const indices = [_]u32{ 0, 1, 2, 2, 3, 0 };
 
 pub fn loop(app: App) void {
-    //
-    var vao: c_uint = undefined;
-    gl.GenVertexArrays(1, @ptrCast(&vao));
-    gl.BindVertexArray(vao);
-    //
+    var vao = va.init();
+    var vbo = vb.init(&position, 8 * @sizeOf(f32));
+    defer vbo.destroy();
 
-    var vbo: c_uint = undefined;
-    gl.GenBuffers(1, @ptrCast(&vbo));
-    gl.BindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.BufferData(gl.ARRAY_BUFFER, 8 * @sizeOf(f32), &position, gl.STATIC_DRAW);
+    var vblo = vbl.init(app.allocator);
+    vblo.push(2) catch unreachable;
 
-    gl.EnableVertexAttribArray(0);
-    gl.VertexAttribPointer(0, 2, gl.FLOAT, gl.FALSE, 2 * @sizeOf(f32), 0);
-    gl.BindBuffer(gl.ARRAY_BUFFER, 0);
+    vao.addBuffer(vbo, vblo);
 
-    var ibo: c_uint = undefined;
-    gl.GenBuffers(1, @ptrCast(&ibo));
-    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, 6 * @sizeOf(u32), &indices, gl.STATIC_DRAW);
-    defer gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
+    var ibo = ib.init(&indices, 6);
+    defer ibo.destroy();
 
-    const vertexShader = loadFile(app.allocator, "./res/shaders/vert.glsl") catch unreachable;
-    const fragmentShader = loadFile(app.allocator, "./res/shaders/frag.glsl") catch unreachable;
+    var shader = Shader.init("./res/shaders/vert.glsl", "./res/shaders/frag.glsl") catch unreachable;
+    shader.bind();
 
-    defer app.allocator.free(vertexShader);
-    defer app.allocator.free(fragmentShader);
+    shader.setUniform4f("u_Color", 0.8, 0.3, 0.8, 1.0);
 
-    const shader = createShader(vertexShader, fragmentShader) catch unreachable;
+    shader.unbind();
 
-    gl.UseProgram(shader);
-    gl.BindVertexArray(vao);
-    defer gl.BindVertexArray(0);
+    vao.bind();
+    defer vao.destroy();
 
+    var r: f32 = 0.0;
+    var inc: f32 = 0.05;
     //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
     while (!app.window.shouldClose()) {
         app.handleInput();
@@ -89,7 +97,13 @@ pub fn loop(app: App) void {
         gl.ClearColor(0.2, 0.4, 0.4, 1.0);
         gl.Clear(gl.COLOR_BUFFER_BIT);
 
+        shader.bind();
+        shader.setUniform4f("u_Color", r, 1.0, 0.0, 1.0);
+
         gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, 0);
+
+        if (r > 1.0 or r < 0.0) inc *= -1.0;
+        r += inc;
 
         app.window.swapBuffers();
 
@@ -173,6 +187,45 @@ fn loadFile(allocator: std.mem.Allocator, filepath: []const u8) ![:0]u8 {
     defer allocator.free(contents);
 
     return null_term_contents;
+}
+
+pub fn glDebugOutput(source: c_uint, debugType: c_uint, id: c_uint, severity: c_uint, _: c_int, message: [*:0]const u8, _: ?*const anyopaque) callconv(gl.APIENTRY) void {
+    if (id == 131169 or id == 131185 or id == 131218 or id == 131204) return;
+
+    const sourceString = switch (source) {
+        gl.DEBUG_SOURCE_API => "API",
+        gl.DEBUG_SOURCE_WINDOW_SYSTEM => "Window System",
+        gl.DEBUG_SOURCE_SHADER_COMPILER => "Shader Compiler",
+        gl.DEBUG_SOURCE_THIRD_PARTY => "Third Party",
+        gl.DEBUG_SOURCE_APPLICATION => "Application",
+        gl.DEBUG_SOURCE_OTHER => "Other",
+        else => "unknown",
+    };
+
+    const typeString = switch (debugType) {
+        gl.DEBUG_TYPE_ERROR => "Error",
+        gl.DEBUG_TYPE_DEPRECATED_BEHAVIOR => "Deprecated Behaviour",
+        gl.DEBUG_TYPE_UNDEFINED_BEHAVIOR => "Undefined Behaviour",
+        gl.DEBUG_TYPE_PORTABILITY => "Portability",
+        gl.DEBUG_TYPE_PERFORMANCE => "Performance",
+        gl.DEBUG_TYPE_MARKER => "Marker",
+        gl.DEBUG_TYPE_PUSH_GROUP => "Push Group",
+        gl.DEBUG_TYPE_POP_GROUP => "Pop Group",
+        gl.DEBUG_TYPE_OTHER => "Other",
+        else => "unknown",
+    };
+
+    const severityString = switch (severity) {
+        gl.DEBUG_SEVERITY_HIGH => "high",
+        gl.DEBUG_SEVERITY_MEDIUM => "medium",
+        gl.DEBUG_SEVERITY_LOW => "low",
+        gl.DEBUG_SEVERITY_NOTIFICATION => "notification",
+        else => "unknown",
+    };
+
+    std.debug.print("--------\n", .{});
+    std.debug.print("[GL_DEBUG] ({d}): {s}\n", .{ id, message });
+    std.debug.print("    Source: {s}\n    Type: {s}\n    Severity: {s}\n", .{ sourceString, typeString, severityString });
 }
 
 test "detect memory leak" {
