@@ -6,6 +6,9 @@ const ib = @import("IndexBuffer.zig");
 const va = @import("VertexArray.zig");
 const vbl = @import("VertexBufferLayout.zig");
 const Shader = @import("Shader.zig");
+const Renderer = @import("Renderer.zig");
+const Texture = @import("Texture.zig");
+const glm = @import("glm.zig").unaligned;
 
 var gl_procs: gl.ProcTable = undefined;
 
@@ -62,15 +65,28 @@ pub fn init(allocator: std.mem.Allocator) !App {
     return App{ .window = window, .allocator = allocator };
 }
 
-const position = [_]f32{ -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5 };
+// zig fmt: off
+const position = [_]f32{ 
+    -0.5, -0.5, 0.0, 0.0,
+     0.5, -0.5, 1.0, 0.0, 
+     0.5,  0.5, 1.0, 1.0,
+    -0.5,  0.5, 0.0, 1.0,
+};
+// zig fmt: on
+
 const indices = [_]u32{ 0, 1, 2, 2, 3, 0 };
 
 pub fn loop(app: App) void {
+    gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.Enable(gl.BLEND);
+
     var vao = va.init();
-    var vbo = vb.init(&position, 8 * @sizeOf(f32));
+    var vbo = vb.init(&position, 4 * 4 * @sizeOf(f32));
     defer vbo.destroy();
 
     var vblo = vbl.init(app.allocator);
+    defer vblo.destroy();
+    vblo.push(2) catch unreachable;
     vblo.push(2) catch unreachable;
 
     vao.addBuffer(vbo, vblo);
@@ -78,10 +94,16 @@ pub fn loop(app: App) void {
     var ibo = ib.init(&indices, 6);
     defer ibo.destroy();
 
+    var proj: glm.mat4 = undefined;
+    glm.glm_ortho(-2.0, 2.0, -1.5, 1.5, -1.0, 1.0, &proj);
+
     var shader = Shader.init("./res/shaders/vert.glsl", "./res/shaders/frag.glsl") catch unreachable;
     shader.bind();
+    shader.setUniformMat4f("u_MVP", proj);
 
-    shader.setUniform4f("u_Color", 0.8, 0.3, 0.8, 1.0);
+    const texture = Texture.init(app.allocator, "./res/textures/sauron_eye.png") catch unreachable;
+    texture.bind(0);
+    shader.setUniform1i("u_Texture", 0);
 
     shader.unbind();
 
@@ -90,17 +112,18 @@ pub fn loop(app: App) void {
 
     var r: f32 = 0.0;
     var inc: f32 = 0.05;
+
     //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
+    Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
     while (!app.window.shouldClose()) {
         app.handleInput();
 
-        gl.ClearColor(0.2, 0.4, 0.4, 1.0);
-        gl.Clear(gl.COLOR_BUFFER_BIT);
+        Renderer.clear();
 
-        shader.bind();
-        shader.setUniform4f("u_Color", r, 1.0, 0.0, 1.0);
+        //shader.bind();
+        //shader.setUniform4f("u_Color", r, r, r, 1.0);
 
-        gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, 0);
+        Renderer.draw(vao, ibo, shader);
 
         if (r > 1.0 or r < 0.0) inc *= -1.0;
         r += inc;
@@ -126,67 +149,6 @@ fn handleInput(app: App) void {
 
 fn frameBufferSizeCallback(_: glfw.Window, width: u32, height: u32) void {
     gl.Viewport(0, 0, @intCast(width), @intCast(height));
-}
-
-fn createShader(vertexShader: [:0]const u8, fragmentShader: [:0]const u8) !c_uint {
-    const program = gl.CreateProgram();
-    const vs = try compileShader(gl.VERTEX_SHADER, vertexShader);
-    const fs = try compileShader(gl.FRAGMENT_SHADER, fragmentShader);
-    defer gl.DeleteShader(vs);
-    defer gl.DeleteShader(fs);
-
-    gl.AttachShader(program, vs);
-    gl.AttachShader(program, fs);
-
-    gl.LinkProgram(program);
-    gl.ValidateProgram(program);
-
-    return program;
-}
-
-fn compileShader(shaderType: c_uint, source: [:0]const u8) !c_uint {
-    const id = gl.CreateShader(shaderType);
-    gl.ShaderSource(id, 1, @ptrCast(&source), null);
-    gl.CompileShader(id);
-    errdefer gl.DeleteShader(id);
-
-    var result: c_int = undefined;
-    gl.GetShaderiv(id, gl.COMPILE_STATUS, &result);
-
-    if (result == gl.FALSE) {
-        var length: c_int = undefined;
-        gl.GetShaderiv(id, gl.INFO_LOG_LENGTH, &length);
-
-        const allocator = std.heap.page_allocator;
-        const message = try allocator.alloc(u8, @intCast(length));
-        defer allocator.free(message);
-
-        gl.GetShaderInfoLog(id, length, &length, message.ptr);
-
-        std.debug.print("Failed to compile shader: {s}\n", .{message});
-
-        return error.FailedShaderCompilation;
-    }
-
-    return id;
-}
-
-fn loadFile(allocator: std.mem.Allocator, filepath: []const u8) ![:0]u8 {
-    const file = std.fs.cwd().openFile(filepath, .{}) catch |err| {
-        std.log.err("Failed to open file: {s}", .{@errorName(err)});
-        return error.FailedToOpenFile;
-    };
-    defer file.close();
-
-    const contents = file.reader().readAllAlloc(allocator, std.math.maxInt(usize)) catch |err| {
-        std.log.err("Failed to read file: {s}", .{@errorName(err)});
-        return error.FailedToReadFile;
-    };
-
-    const null_term_contents = allocator.dupeZ(u8, contents[0..]);
-    defer allocator.free(contents);
-
-    return null_term_contents;
 }
 
 pub fn glDebugOutput(source: c_uint, debugType: c_uint, id: c_uint, severity: c_uint, _: c_int, message: [*:0]const u8, _: ?*const anyopaque) callconv(gl.APIENTRY) void {

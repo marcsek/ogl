@@ -1,6 +1,7 @@
 const std = @import("std");
 const gl = @import("gl");
 const alloc = std.heap.c_allocator;
+const glm = @import("glm.zig").unaligned;
 
 const MyHashMap = std.StringHashMap(c_int);
 
@@ -20,8 +21,16 @@ pub fn init(vertexPath: []const u8, fragmentPath: []const u8) !Self {
     return Self{ .rendererID = shader, .uniformCache = MyHashMap.init(alloc) };
 }
 
+pub fn setUniform1i(shader: *Self, name: [:0]const u8, value: i32) void {
+    gl.Uniform1i(shader.getUniformLocation(name), value);
+}
+
 pub fn setUniform4f(shader: *Self, name: [:0]const u8, v0: f32, v1: f32, v2: f32, v3: f32) void {
     gl.Uniform4f(shader.getUniformLocation(name), v0, v1, v2, v3);
+}
+
+pub fn setUniformMat4f(shader: *Self, name: [:0]const u8, matrix: glm.mat4) void {
+    gl.UniformMatrix4fv(shader.getUniformLocation(name), 1, gl.FALSE, &matrix[0][0]);
 }
 
 pub fn bind(shader: Self) void {

@@ -35,3 +35,7 @@ pub fn push(vbl: *Self, count: u32) !void {
 
     vbl.stride += count * VertexBufferElement.getSizeOfType(gl.FLOAT);
 }
+
+pub fn destroy(vbl: Self) void {
+    vbl.elements.deinit();
+}

@@ -26,6 +26,12 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
+    exe.linkLibC();
+    exe.addCSourceFile(.{ .file = b.path("./vendor/stb_image/stb_imageimpl.c"), .flags = &[_][]const u8{ "-g", "-O3" } });
+    exe.addIncludePath(b.path("vendor/stb_image/"));
+
+    exe.addIncludePath(b.path("vendor/cglm/include"));
+
     const exe_check = b.addExecutable(.{
         .name = "ogl",
         .root_source_file = b.path("src/main.zig"),
