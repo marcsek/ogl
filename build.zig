@@ -29,8 +29,27 @@ pub fn build(b: *std.Build) void {
     exe.linkLibC();
     exe.addCSourceFile(.{ .file = b.path("./vendor/stb_image/stb_imageimpl.c"), .flags = &[_][]const u8{ "-g", "-O3" } });
     exe.addIncludePath(b.path("vendor/stb_image/"));
-
     exe.addIncludePath(b.path("vendor/cglm/include"));
+    exe.addIncludePath(b.path("vendor/glfw/include"));
+
+    const IMGUI_SOURCES = [_][]const u8{
+        "vendor/imgui_bindings/generated/dcimgui.cpp",
+        "vendor/imgui_bindings/generated/dcimgui_impl_gl3.cpp",
+        "vendor/imgui_bindings/generated/dcimgui_impl_glfw.cpp",
+
+        "vendor/imgui_bindings/imgui/imgui.cpp",
+        "vendor/imgui_bindings/imgui/imgui_demo.cpp",
+        "vendor/imgui_bindings/imgui/imgui_draw.cpp",
+        "vendor/imgui_bindings/imgui/imgui_tables.cpp",
+        "vendor/imgui_bindings/imgui/imgui_widgets.cpp",
+        "vendor/imgui_bindings/imgui/imgui_impl_glfw.cpp",
+        "vendor/imgui_bindings/imgui/imgui_impl_opengl3.cpp",
+    };
+
+    exe.linkLibCpp();
+    exe.addIncludePath(b.path("vendor/imgui_bindings/generated/"));
+    exe.addIncludePath(b.path("vendor/imgui_bindings/imgui/"));
+    exe.addCSourceFiles(.{ .files = &IMGUI_SOURCES, .flags = &[_][]const u8{ "-g", "-O3" } });
 
     const exe_check = b.addExecutable(.{
         .name = "ogl",
