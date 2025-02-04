@@ -9,20 +9,14 @@ const Shader = @import("Shader.zig");
 const Renderer = @import("Renderer.zig");
 const Texture = @import("Texture.zig");
 const glm = @import("glm.zig").unaligned;
-const c = @cImport({
-    @cInclude("GLFW/glfw3.h");
-    @cInclude("dcimgui.h");
-    @cInclude("dcimgui_impl_glfw.h");
-    @cInclude("dcimgui_impl_gl3.h");
-});
-
+const ImGui = @import("imgui.zig");
 var gl_procs: gl.ProcTable = undefined;
 
 const App = @This();
 
 window: glfw.Window,
 allocator: std.mem.Allocator,
-ImGuiCtx: ?*c.ImGuiContext,
+ImGuiCtx: ImGui,
 
 fn errorCallback(error_code: glfw.ErrorCode, description: [:0]const u8) void {
     std.log.err("glfw: {}: {s}\n", .{ error_code, description });
@@ -54,14 +48,10 @@ pub fn init(allocator: std.mem.Allocator) !App {
     gl.makeProcTableCurrent(&gl_procs);
     errdefer gl.makeProcTableCurrent(null);
 
-    glfw.swapInterval(0);
+    glfw.swapInterval(1);
     window.setFramebufferSizeCallback(frameBufferSizeCallback);
 
-    //_ = d.ImGui_ImplGlfw_InitForOpenGL(@ptrCast(window.handle), true);
-    const ctx = c.ImGui_CreateContext(null);
-    _ = c.cImGui_ImplGlfw_InitForOpenGL(@ptrCast(window.handle), true);
-    _ = c.cImGui_ImplOpenGL3_Init();
-    c.ImGui_StyleColorsDark(null);
+    const imgGuiCtx = ImGui.init(window) catch unreachable;
 
     // Debug callback setup
     var flags: c_int = undefined;
@@ -75,7 +65,7 @@ pub fn init(allocator: std.mem.Allocator) !App {
 
     std.debug.print("OpenGL version: {s}\n", .{gl.GetString(gl.VERSION) orelse ""});
 
-    return App{ .window = window, .allocator = allocator, .ImGuiCtx = ctx };
+    return App{ .window = window, .allocator = allocator, .ImGuiCtx = imgGuiCtx };
 }
 
 // zig fmt: off
@@ -92,8 +82,6 @@ const indices = [_]u32{ 0, 1, 2, 2, 3, 0 };
 pub fn loop(app: App) void {
     gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.Enable(gl.BLEND);
-
-    const io = c.ImGui_GetIO();
 
     var vao = va.init();
     var vbo = vb.init(&position, 4 * 4 * @sizeOf(f32));
@@ -128,6 +116,7 @@ pub fn loop(app: App) void {
     var r: f32 = 0.0;
     var inc: f32 = 0.05;
 
+    const io = ImGui.c.GetIO();
     //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
     //var shouldShow: bool = true;
@@ -136,23 +125,20 @@ pub fn loop(app: App) void {
 
         Renderer.clear();
 
-        c.cImGui_ImplOpenGL3_NewFrame();
-        c.cImGui_ImplGlfw_NewFrame();
-        c.ImGui_NewFrame();
+        ImGui.newFrame();
 
         Renderer.draw(vao, ibo, shader);
 
         if (r > 1.0 or r < 0.0) inc *= -1.0;
         r += inc;
 
-        c.ImGui_SetNextWindowPos(c.ImVec2{ .x = io.*.DisplaySize.x - 200, .y = 5 }, c.ImGuiCond_Always);
-        _ = c.ImGui_Begin("Framerate", null, c.ImGuiWindowFlags_NoDecoration | c.ImGuiWindowFlags_NoBackground | c.ImGuiWindowFlags_NoInputs);
+        ImGui.c.SetNextWindowPos(ImGui.c.ImVec2{ .x = io.*.DisplaySize.x - 200, .y = 5 }, ImGui.c.ImGuiCond_Always);
+        _ = ImGui.c.Begin("Framerate", null, ImGui.c.ImGuiWindowFlags_NoDecoration | ImGui.c.ImGuiWindowFlags_NoBackground | ImGui.c.ImGuiWindowFlags_NoInputs);
 
-        c.ImGui_Text("%.3f ms/frame (%.1f FPS)", 1000.0 / io.*.Framerate, io.*.Framerate);
-        c.ImGui_End();
+        ImGui.c.Text("%.3f ms/frame (%.1f FPS)", 1000.0 / io.*.Framerate, io.*.Framerate);
+        ImGui.c.End();
 
-        c.ImGui_Render();
-        c.cImGui_ImplOpenGL3_RenderDrawData(c.ImGui_GetDrawData());
+        ImGui.render();
 
         app.window.swapBuffers();
 
@@ -161,9 +147,7 @@ pub fn loop(app: App) void {
 }
 
 pub fn destroy(app: App) void {
-    c.cImGui_ImplOpenGL3_Shutdown();
-    c.cImGui_ImplGlfw_Shutdown();
-    c.ImGui_DestroyContext(app.ImGuiCtx);
+    app.ImGuiCtx.destroy();
     gl.makeProcTableCurrent(null);
     glfw.makeContextCurrent(null);
     app.window.destroy();

@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
 
     const IMGUI_SOURCES = [_][]const u8{
         "vendor/imgui_bindings/generated/dcimgui.cpp",
-        "vendor/imgui_bindings/generated/dcimgui_impl_gl3.cpp",
+        "vendor/imgui_bindings/generated/dcimgui_impl_opengl3.cpp",
         "vendor/imgui_bindings/generated/dcimgui_impl_glfw.cpp",
 
         "vendor/imgui_bindings/imgui/imgui.cpp",
@@ -48,6 +48,9 @@ pub fn build(b: *std.Build) void {
 
     exe.linkLibCpp();
     exe.addIncludePath(b.path("vendor/imgui_bindings/generated/"));
+    // LSP bug, need to include "explicitly"
+    exe.addIncludePath(b.path("vendor/imgui_bindings/generated/dcimgui.h"));
+    //
     exe.addIncludePath(b.path("vendor/imgui_bindings/imgui/"));
     exe.addCSourceFiles(.{ .files = &IMGUI_SOURCES, .flags = &[_][]const u8{ "-g", "-O3" } });
 

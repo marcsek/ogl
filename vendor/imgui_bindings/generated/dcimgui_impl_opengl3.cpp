@@ -10,7 +10,7 @@
 // Wrap this in a namespace to keep it separate from the C++ API
 namespace cimgui
 {
-#include "dcimgui_impl_gl3.h"
+#include "dcimgui_impl_opengl3.h"
 }
 
 // By-value struct conversions
