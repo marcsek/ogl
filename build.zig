@@ -27,8 +27,8 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     exe.linkLibC();
-    exe.addCSourceFile(.{ .file = b.path("./vendor/stb_image/stb_imageimpl.c"), .flags = &[_][]const u8{ "-g", "-O3" } });
     exe.addIncludePath(b.path("vendor/stb_image/"));
+    exe.addCSourceFile(.{ .file = b.path("./vendor/stb_image/stb_imageimpl.c") });
     exe.addIncludePath(b.path("vendor/cglm/include"));
     exe.addIncludePath(b.path("vendor/glfw/include"));
 
