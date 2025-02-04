@@ -11,7 +11,7 @@ const Self = @This();
 ImGuiCtx: *c.ImGuiContext,
 
 pub fn init(window: glfw.Window) !Self {
-    const ctx = c.CreateContext(null) orelse return error.ImGuiInitFailed;
+    const ctx = c.igCreateContext(null) orelse return error.ImGuiInitFailed;
     const glfwInit = igGlfw.cImGui_ImplGlfw_InitForOpenGL(@ptrCast(window.handle), true);
     const openGlInit = igOpenGl.cImGui_ImplOpenGL3_Init();
 
@@ -19,7 +19,7 @@ pub fn init(window: glfw.Window) !Self {
         return error.ImGuiImplInitFailed;
     }
 
-    c.StyleColorsDark(null);
+    c.igStyleColorsDark(null);
 
     return Self{ .ImGuiCtx = ctx };
 }
@@ -27,16 +27,16 @@ pub fn init(window: glfw.Window) !Self {
 pub fn newFrame() void {
     igOpenGl.cImGui_ImplOpenGL3_NewFrame();
     igGlfw.cImGui_ImplGlfw_NewFrame();
-    c.NewFrame();
+    c.igNewFrame();
 }
 
 pub fn render() void {
-    c.Render();
-    igOpenGl.cImGui_ImplOpenGL3_RenderDrawData(@ptrCast(c.GetDrawData()));
+    c.igRender();
+    igOpenGl.cImGui_ImplOpenGL3_RenderDrawData(@ptrCast(c.igGetDrawData()));
 }
 
 pub fn destroy(ig: Self) void {
     igOpenGl.cImGui_ImplOpenGL3_Shutdown();
     igGlfw.cImGui_ImplGlfw_Shutdown();
-    c.DestroyContext(ig.ImGuiCtx);
+    c.igDestroyContext(ig.ImGuiCtx);
 }

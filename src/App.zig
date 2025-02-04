@@ -10,6 +10,7 @@ const Renderer = @import("Renderer.zig");
 const Texture = @import("Texture.zig");
 const glm = @import("glm.zig").unaligned;
 const ImGui = @import("imgui.zig");
+
 var gl_procs: gl.ProcTable = undefined;
 
 const App = @This();
@@ -116,7 +117,7 @@ pub fn loop(app: App) void {
     var r: f32 = 0.0;
     var inc: f32 = 0.05;
 
-    const io = ImGui.c.GetIO();
+    const io = ImGui.c.igGetIO();
     //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
     //var shouldShow: bool = true;
@@ -132,11 +133,11 @@ pub fn loop(app: App) void {
         if (r > 1.0 or r < 0.0) inc *= -1.0;
         r += inc;
 
-        ImGui.c.SetNextWindowPos(ImGui.c.ImVec2{ .x = io.*.DisplaySize.x - 200, .y = 5 }, ImGui.c.ImGuiCond_Always);
-        _ = ImGui.c.Begin("Framerate", null, ImGui.c.ImGuiWindowFlags_NoDecoration | ImGui.c.ImGuiWindowFlags_NoBackground | ImGui.c.ImGuiWindowFlags_NoInputs);
+        ImGui.c.igSetNextWindowPos(ImGui.c.ImVec2{ .x = io.*.DisplaySize.x - 200, .y = 5 }, ImGui.c.ImGuiCond_Always);
+        _ = ImGui.c.igBegin("Framerate", null, ImGui.c.ImGuiWindowFlags_NoDecoration | ImGui.c.ImGuiWindowFlags_NoBackground | ImGui.c.ImGuiWindowFlags_NoInputs);
 
-        ImGui.c.Text("%.3f ms/frame (%.1f FPS)", 1000.0 / io.*.Framerate, io.*.Framerate);
-        ImGui.c.End();
+        ImGui.c.igText("%.3f ms/frame (%.1f FPS)", 1000.0 / io.*.Framerate, io.*.Framerate);
+        ImGui.c.igEnd();
 
         ImGui.render();
 
