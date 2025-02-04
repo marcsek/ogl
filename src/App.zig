@@ -57,11 +57,13 @@ pub fn init(allocator: std.mem.Allocator) !App {
     // Debug callback setup
     var flags: c_int = undefined;
     gl.GetIntegerv(gl.CONTEXT_FLAGS, @ptrCast(&flags));
-    if (flags != gl.FALSE and gl.CONTEXT_FLAG_DEBUG_BIT != 0) {
-        gl.Enable(gl.DEBUG_OUTPUT);
-        gl.Enable(gl.DEBUG_OUTPUT_SYNCHRONOUS);
-        gl.DebugMessageCallback(glDebugOutput, null);
-        gl.DebugMessageControl(gl.DONT_CARE, gl.DONT_CARE, gl.DONT_CARE, 0, null, gl.TRUE);
+    if (comptime std.meta.hasFn(gl, "CONTEXT_FLAGS")) {
+        if (flags != gl.FALSE and gl.CONTEXT_FLAGS != 0) comptime {
+            gl.Enable(gl.DEBUG_OUTPUT);
+            gl.Enable(gl.DEBUG_OUTPUT_SYNCHRONOUS);
+            gl.DebugMessageCallback(glDebugOutput, null);
+            gl.DebugMessageControl(gl.DONT_CARE, gl.DONT_CARE, gl.DONT_CARE, 0, null, gl.TRUE);
+        };
     }
 
     std.debug.print("OpenGL version: {s}\n", .{gl.GetString(gl.VERSION) orelse ""});
