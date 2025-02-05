@@ -1,6 +1,6 @@
 Bindings generated using [dear bindings](https://github.com/dearimgui/dear_bindings)
 
-**:warning: SSE needs to be disabled for ImGui**: Can be done by adding `#define IMGUI_DISABLE_SSE` to *imgui.h*
+**:warning: SSE might need to be disabled for ImGui**: Can be done by uncommenting `#define IMGUI_DISABLE_SSE` in *imgui/imconfig.h*
 
 ##### Used commands
 

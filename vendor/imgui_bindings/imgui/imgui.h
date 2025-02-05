@@ -31,7 +31,6 @@
 #define IMGUI_VERSION       "1.91.9 WIP"
 #define IMGUI_VERSION_NUM   19182
 #define IMGUI_HAS_TABLE
-#define IMGUI_DISABLE_SSE
 
 /*
 

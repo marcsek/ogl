@@ -19,18 +19,17 @@ pub fn build(b: *std.Build) void {
 
     const gl_bindings = @import("zigglgen").generateBindingsModule(b, .{
         .api = .gl,
-        .version = .@"4.1",
+        .version = .@"4.3",
         .profile = .core,
     });
     exe.root_module.addImport("gl", gl_bindings);
 
-    b.installArtifact(exe);
-
     exe.linkLibC();
     exe.addIncludePath(b.path("vendor/stb_image/"));
     exe.addCSourceFile(.{ .file = b.path("./vendor/stb_image/stb_imageimpl.c") });
-    exe.addIncludePath(b.path("vendor/cglm/include"));
     exe.addIncludePath(b.path("vendor/glfw/include"));
+    exe.addObjectFile(b.path("vendor/cglm/build/libcglm.a"));
+    exe.addIncludePath(b.path("vendor/cglm/include"));
 
     const IMGUI_SOURCES = [_][]const u8{
         "vendor/imgui_bindings/generated/dcimgui.cpp",
@@ -50,6 +49,8 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath(b.path("vendor/imgui_bindings/generated/"));
     exe.addIncludePath(b.path("vendor/imgui_bindings/imgui/"));
     exe.addCSourceFiles(.{ .files = &IMGUI_SOURCES, .flags = &[_][]const u8{ "-g", "-O3" } });
+
+    b.installArtifact(exe);
 
     const exe_check = b.addExecutable(.{
         .name = "ogl",
