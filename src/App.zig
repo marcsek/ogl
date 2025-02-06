@@ -58,12 +58,12 @@ pub fn init(allocator: std.mem.Allocator) !App {
     var flags: c_int = undefined;
     gl.GetIntegerv(gl.CONTEXT_FLAGS, @ptrCast(&flags));
     if (comptime std.meta.hasFn(gl, "CONTEXT_FLAGS")) {
-        if (flags != gl.FALSE and gl.CONTEXT_FLAGS != 0) comptime {
+        if (flags != gl.FALSE and gl.CONTEXT_FLAGS != 0) {
             gl.Enable(gl.DEBUG_OUTPUT);
             gl.Enable(gl.DEBUG_OUTPUT_SYNCHRONOUS);
             gl.DebugMessageCallback(glDebugOutput, null);
             gl.DebugMessageControl(gl.DONT_CARE, gl.DONT_CARE, gl.DONT_CARE, 0, null, gl.TRUE);
-        };
+        }
     }
 
     std.debug.print("OpenGL version: {s}\n", .{gl.GetString(gl.VERSION) orelse ""});
@@ -115,10 +115,30 @@ const indices = [_]u32{
     20, 21, 22, 22, 23, 20, // Top face;
 };
 
+var mouseLastX: f32 = 0;
+var mouseLastY: f32 = 0;
+var pitch: f32 = 0;
+var yaw: f32 = -90;
+var fov: f32 = 45;
+
+var cameraPos: glm.vec3 = .{ 0, 0, 20 };
+var cameraFront: glm.vec3 = .{ 0, 0, -1 };
+var cameraUp: glm.vec3 = .{ 0, 1, 0 };
+
+var deltaTime: f32 = 0;
+var lastFrame: f32 = 0;
+
 pub fn loop(app: App) void {
+    var winSize = app.window.getFramebufferSize();
+    mouseLastX = @as(f32, @floatFromInt(winSize.width)) / 2;
+    mouseLastY = @as(f32, @floatFromInt(winSize.height)) / 2;
+
     //gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     //gl.Enable(gl.BLEND);
     gl.Enable(gl.DEPTH_TEST);
+    app.window.setInputMode(glfw.Window.InputMode.cursor, glfw.Window.InputModeCursor.disabled);
+    app.window.setScrollCallback(scrollCallback);
+    app.window.setCursorPosCallback(mouseCallback);
 
     var vao = va.init();
     var vbo = vb.init(&position, 4 * 6 * 5 * @sizeOf(f32));
@@ -134,16 +154,6 @@ pub fn loop(app: App) void {
     var ibo = ib.init(&indices, 6 * 6);
     defer ibo.destroy();
 
-    //var camera_diretion: glm.vec3 = undefined;
-    //glm.glmc_vec3_sub(&camera_pos, &camera_target, &camera_diretion);
-    //glm.glmc_vec3_normalize(&camera_diretion);
-
-    //var camera_right: glm.vec3 = undefined;
-    //glm.glmc_vec3_crossn(&up, &camera_diretion, &camera_right);
-
-    //var camera_up: glm.vec3 = undefined;
-    //glm.glm_vec3_cross(&camera_diretion, &camera_right, &camera_up);
-
     var shader = Shader.init("./res/shaders/vert.glsl", "./res/shaders/frag.glsl") catch unreachable;
     shader.bind();
 
@@ -151,19 +161,16 @@ pub fn loop(app: App) void {
     texture.bind(0);
     shader.setUniform1i("u_Texture", 0);
 
-    var view: glm.mat4 = undefined;
-    var model: glm.mat4 = undefined;
-    var projection: glm.mat4 = undefined;
-
-    var camera_pos: glm.vec3 = .{ 0, 0, -5 };
-    var camera_target: glm.vec3 = .{ 0, 0, 0 };
-    var rotAxis: glm.vec3 = .{ 1, 1, 1 };
-    var up: glm.vec3 = .{ 0, 1, 0 };
-
     shader.unbind();
 
     vao.bind();
     defer vao.destroy();
+
+    var view: glm.mat4 = undefined;
+    var model: glm.mat4 = undefined;
+    var projection: glm.mat4 = undefined;
+
+    var rotAxis: glm.vec3 = .{ 1, 1, 1 };
 
     const rand = std.crypto.random;
     var poses: [6]glm.vec3 = undefined;
@@ -171,34 +178,37 @@ pub fn loop(app: App) void {
     for (1..poses.len) |i| {
         const mx: f32 = @floatFromInt(rand.intRangeAtMost(i32, -200, 200));
         const my: f32 = @floatFromInt(rand.intRangeAtMost(i32, -200, 200));
-        const mz: f32 = @floatFromInt(rand.intRangeAtMost(i32, 0, 500));
-        poses[i] = glm.vec3{ mx / 40, my / 40, mz / 25 };
+        const mz: f32 = @floatFromInt(rand.intRangeAtMost(i32, -500, -100));
+        poses[i] = glm.vec3{ mx / 40, my / 40, mz / 50 };
     }
 
-    const radius: f32 = 20.0;
+    //const radius: f32 = 20.0;
     var rotAngle: f32 = 0.0;
-    var winSize = app.window.getFramebufferSize();
 
     const io = ImGui.c.igGetIO();
     //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
     while (!app.window.shouldClose()) {
+        const currentFrame: f32 = @floatCast(glfw.getTime());
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
         app.handleInput();
 
         Renderer.clear();
         ImGui.newFrame();
 
+        var cameraTarget: glm.vec3 = undefined;
+        glm.glmc_vec3_add(&cameraPos, &cameraFront, &cameraTarget);
+
         glm.glmc_mat4_identity(&view);
-        glm.glmc_lookat(&camera_pos, &camera_target, &up, &view);
+        glm.glmc_lookat(&cameraPos, &cameraTarget, &cameraUp, &view);
 
         const aspect: f32 = @as(f32, @floatFromInt(winSize.width)) / @as(f32, @floatFromInt(winSize.height));
-        glm.glmc_perspective(comptime glm.glm_rad(45), aspect, 0.1, 100, &projection);
+        glm.glmc_perspective(glm.glm_rad(fov), aspect, 0.1, 100, &projection);
 
         shader.setUniformMat4f("view", view);
         shader.setUniformMat4f("projection", projection);
-
-        camera_pos[0] = @sin(@as(f32, @floatCast(glfw.getTime()))) * radius;
-        camera_pos[2] = @cos(@as(f32, @floatCast(glfw.getTime()))) * radius;
 
         for (0..5) |i| {
             glm.glmc_mat4_identity(&model);
@@ -209,18 +219,20 @@ pub fn loop(app: App) void {
             Renderer.draw(vao, ibo, shader);
         }
 
-        rotAngle += 0.0205;
+        rotAngle += 3 * deltaTime;
 
         ImGui.c.igSetNextWindowPos(.{ .x = io.*.DisplaySize.x - 200, .y = 5 }, ImGui.c.ImGuiCond_Always);
+        ImGui.c.igSetNextWindowSize(.{ .x = 0, .y = 50 }, ImGui.c.ImGuiCond_Always);
         _ = ImGui.c.igBegin("Framerate", null, ImGui.c.ImGuiWindowFlags_NoDecoration | ImGui.c.ImGuiWindowFlags_NoBackground | ImGui.c.ImGuiWindowFlags_NoInputs);
 
         ImGui.c.igText("%.3f ms/frame (%.1f FPS)", 1000.0 / io.*.Framerate, io.*.Framerate);
+        ImGui.c.igText("%.3f deltaTime", deltaTime);
         ImGui.c.igEnd();
 
         _ = ImGui.c.igBegin("Debug", null, 0);
-        _ = ImGui.c.igSliderFloat("cam-x", &camera_pos[0], -10, 10);
-        _ = ImGui.c.igSliderFloat("cam-y", &camera_pos[1], -10, 10);
-        _ = ImGui.c.igSliderFloat("cam-z", &camera_pos[2], -120, -0.1);
+        _ = ImGui.c.igSliderFloat("cam-x", &cameraPos[0], -10, 10);
+        _ = ImGui.c.igSliderFloat("cam-y", &cameraPos[1], -10, 10);
+        _ = ImGui.c.igSliderFloat("cam-z", &cameraPos[2], 0.1, 120);
         ImGui.c.igEnd();
 
         ImGui.render();
@@ -240,10 +252,85 @@ pub fn destroy(app: App) void {
     glfw.terminate();
 }
 
+var cursorHidden = true;
+var start: f32 = 0;
 fn handleInput(app: App) void {
     if (app.window.getKey(glfw.Key.escape) == glfw.Action.press) {
         app.window.setShouldClose(true);
     }
+
+    if (app.window.getKey(glfw.Key.left_control) == glfw.Action.press) blk: {
+        if (glfw.getTime() - start < 0.5) break :blk;
+
+        app.window.setInputMode(glfw.Window.InputMode.cursor, if (cursorHidden)
+            glfw.Window.InputModeCursor.normal
+        else
+            glfw.Window.InputModeCursor.disabled);
+
+        if (!cursorHidden)
+            app.window.setCursorPos(mouseLastX, mouseLastY);
+
+        cursorHidden = !cursorHidden;
+        start = @floatCast(glfw.getTime());
+    }
+
+    const cameraSpeed: f32 = 5 * deltaTime;
+    if (app.window.getKey(glfw.Key.w) == glfw.Action.press) {
+        glm.glmc_vec3_muladds(&cameraFront, cameraSpeed, &cameraPos);
+    }
+
+    if (app.window.getKey(glfw.Key.s) == glfw.Action.press) {
+        glm.glmc_vec3_mulsubs(&cameraFront, cameraSpeed, &cameraPos);
+    }
+
+    if (app.window.getKey(glfw.Key.a) == glfw.Action.press) {
+        var left: glm.vec3 = undefined;
+        glm.glmc_vec3_crossn(&cameraFront, &cameraUp, &left);
+        glm.glmc_vec3_mulsubs(&left, cameraSpeed, &cameraPos);
+    }
+
+    if (app.window.getKey(glfw.Key.d) == glfw.Action.press) {
+        var right: glm.vec3 = undefined;
+        glm.glmc_vec3_crossn(&cameraUp, &cameraFront, &right);
+        glm.glmc_vec3_mulsubs(&right, cameraSpeed, &cameraPos);
+    }
+}
+
+var firstMouseCb = true;
+fn mouseCallback(_: glfw.Window, xpos: f64, ypos: f64) void {
+    if (firstMouseCb) {
+        firstMouseCb = false;
+        return;
+    }
+
+    if (!cursorHidden) return;
+
+    const xPos4: f32 = @floatCast(xpos);
+    const yPos4: f32 = @floatCast(ypos);
+
+    var xOffset: f32 = xPos4 - mouseLastX;
+    var yOffset: f32 = mouseLastY - yPos4;
+
+    mouseLastX = xPos4;
+    mouseLastY = yPos4;
+
+    const sensitivity: f32 = 0.1;
+    xOffset *= sensitivity;
+    yOffset *= sensitivity;
+
+    yaw += xOffset;
+    pitch = @min(@max(pitch + yOffset, -89.0), 89.0);
+
+    var direction: glm.vec3 = undefined;
+    direction[0] = @cos(glm.glm_rad(yaw)) * @cos(glm.glm_rad(pitch));
+    direction[1] = @sin(glm.glm_rad(pitch));
+    direction[2] = @sin(glm.glm_rad(yaw)) * @cos(glm.glm_rad(pitch));
+    glm.glmc_vec3_normalize(&direction);
+    glm.glmc_vec3_copy(&direction, &cameraFront);
+}
+
+fn scrollCallback(_: glfw.Window, _: f64, yoffset: f64) void {
+    fov = @min(@max(fov - @as(f32, @floatCast(yoffset)) * 2, 1), 90);
 }
 
 fn frameBufferSizeCallback(_: glfw.Window, width: u32, height: u32) void {
