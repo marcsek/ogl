@@ -8,6 +8,8 @@
 #ifndef cglm_h
 #define cglm_h
 
+#define CGLM_ALL_UNALIGNED
+
 #include "common.h"
 #include "vec2.h"
 #include "vec3.h"

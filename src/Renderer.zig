@@ -9,8 +9,8 @@ pub fn draw(va: VertexArray, ib: IndexBuffer, sh: Shader) void {
     ib.bind();
     sh.bind();
 
-    //gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, 0);
-    gl.DrawArrays(gl.TRIANGLES, 0, 36);
+    gl.DrawElements(gl.TRIANGLES, @intCast(ib.count), gl.UNSIGNED_INT, 0);
+    //gl.DrawArrays(gl.TRIANGLES, 0, 36);
 }
 
 pub fn clear() void {
