@@ -1,7 +1,8 @@
 const std = @import("std");
 const gl = @import("gl");
-const alloc = std.heap.c_allocator;
 const glm = @import("glm.zig").unaligned;
+const alloc = std.heap.c_allocator;
+const log = std.log;
 
 const MyHashMap = std.StringHashMap(c_int);
 
@@ -54,7 +55,7 @@ fn getUniformLocation(shader: *Self, name: [:0]const u8) c_int {
     const location = gl.GetUniformLocation(shader.rendererID, name.ptr);
 
     if (location == -1)
-        std.debug.print("Uniform '{s}' doesn't exist.\n", .{name});
+        log.warn("Uniform '{s}' doesn't exist", .{name});
 
     shader.uniformCache.put(name, location) catch unreachable;
 
@@ -96,7 +97,7 @@ fn compileShader(shaderType: c_uint, source: [:0]const u8) !c_uint {
 
         gl.GetShaderInfoLog(id, length, &length, message.ptr);
 
-        std.debug.print("Failed to compile shader: {s}\n", .{message});
+        log.err("Failed to compile shader: {s}\n", .{message});
 
         return error.FailedShaderCompilation;
     }
@@ -106,13 +107,13 @@ fn compileShader(shaderType: c_uint, source: [:0]const u8) !c_uint {
 
 fn loadFile(allocator: std.mem.Allocator, filepath: []const u8) ![:0]u8 {
     const file = std.fs.cwd().openFile(filepath, .{}) catch |err| {
-        std.log.err("Failed to open file: {s}", .{@errorName(err)});
+        log.err("Failed to open file: {s}", .{@errorName(err)});
         return error.FailedToOpenFile;
     };
     defer file.close();
 
     const contents = file.reader().readAllAlloc(allocator, std.math.maxInt(usize)) catch |err| {
-        std.log.err("Failed to read file: {s}", .{@errorName(err)});
+        log.err("Failed to read file: {s}", .{@errorName(err)});
         return error.FailedToReadFile;
     };
 

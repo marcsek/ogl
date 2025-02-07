@@ -10,6 +10,11 @@ const Renderer = @import("Renderer.zig");
 const Texture = @import("Texture.zig");
 const glm = @import("glm.zig").unaligned;
 const ImGui = @import("imgui.zig");
+const Camera = @import("Camera.zig");
+const utils = @import("utils.zig");
+const log = std.log;
+const openGlLog = utils.scopes.openGlLog;
+const glfwLog = utils.scopes.glfwLog;
 
 var gl_procs: gl.ProcTable = undefined;
 
@@ -19,12 +24,12 @@ window: glfw.Window,
 allocator: std.mem.Allocator,
 ImGuiCtx: ImGui,
 
-fn errorCallback(error_code: glfw.ErrorCode, description: [:0]const u8) void {
-    std.log.err("glfw: {}: {s}\n", .{ error_code, description });
-}
+var camera: Camera = undefined;
 
 pub fn init(allocator: std.mem.Allocator) !App {
-    glfw.setErrorCallback(errorCallback);
+    log.info("Initializing application", .{});
+
+    glfw.setErrorCallback(utils.glfwErrorCallback);
 
     if (!glfw.init(.{}))
         return error.GlfwInitFailed;
@@ -37,8 +42,9 @@ pub fn init(allocator: std.mem.Allocator) !App {
         .opengl_forward_compat = true,
         .context_debug = true,
     }) orelse return error.InitFailed;
-
     errdefer window.destroy();
+
+    glfwLog.info("Created window '{s}' of size {d}x{d}", .{ "Fuckery", 1440, 1080 });
 
     glfw.makeContextCurrent(window);
     errdefer glfw.makeContextCurrent(null);
@@ -57,16 +63,21 @@ pub fn init(allocator: std.mem.Allocator) !App {
     // Debug callback setup
     var flags: c_int = undefined;
     gl.GetIntegerv(gl.CONTEXT_FLAGS, @ptrCast(&flags));
-    if (comptime std.meta.hasFn(gl, "CONTEXT_FLAGS")) {
+    if (@hasDecl(gl, "DEBUG_OUTPUT")) {
         if (flags != gl.FALSE and gl.CONTEXT_FLAGS != 0) {
             gl.Enable(gl.DEBUG_OUTPUT);
             gl.Enable(gl.DEBUG_OUTPUT_SYNCHRONOUS);
-            gl.DebugMessageCallback(glDebugOutput, null);
+            gl.DebugMessageCallback(utils.glDebugOutput, null);
             gl.DebugMessageControl(gl.DONT_CARE, gl.DONT_CARE, gl.DONT_CARE, 0, null, gl.TRUE);
-        }
-    }
 
-    std.debug.print("OpenGL version: {s}\n", .{gl.GetString(gl.VERSION) orelse ""});
+            openGlLog.debug("Debugging enabled", .{});
+        }
+    } else openGlLog.debug("Debugging not available", .{});
+
+    camera = Camera.init(45);
+
+    openGlLog.info("Version: {s}", .{gl.GetString(gl.VERSION) orelse ""});
+    log.info("Initalization done", .{});
 
     return App{ .window = window, .allocator = allocator, .ImGuiCtx = imgGuiCtx };
 }
@@ -115,27 +126,20 @@ const indices = [_]u32{
     20, 21, 22, 22, 23, 20, // Top face;
 };
 
-var mouseLastX: f32 = 0;
-var mouseLastY: f32 = 0;
-var pitch: f32 = 0;
-var yaw: f32 = -90;
 var fov: f32 = 45;
-
-var cameraPos: glm.vec3 = .{ 0, 0, 20 };
-var cameraFront: glm.vec3 = .{ 0, 0, -1 };
-var cameraUp: glm.vec3 = .{ 0, 1, 0 };
 
 var deltaTime: f32 = 0;
 var lastFrame: f32 = 0;
 
 pub fn loop(app: App) void {
     var winSize = app.window.getFramebufferSize();
-    mouseLastX = @as(f32, @floatFromInt(winSize.width)) / 2;
-    mouseLastY = @as(f32, @floatFromInt(winSize.height)) / 2;
+    camera.mouse.lastX = @as(f32, @floatFromInt(winSize.width)) / 2;
+    camera.mouse.lastY = @as(f32, @floatFromInt(winSize.height)) / 2;
 
     //gl.BlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     //gl.Enable(gl.BLEND);
     gl.Enable(gl.DEPTH_TEST);
+
     app.window.setInputMode(glfw.Window.InputMode.cursor, glfw.Window.InputModeCursor.disabled);
     app.window.setScrollCallback(scrollCallback);
     app.window.setCursorPosCallback(mouseCallback);
@@ -161,12 +165,11 @@ pub fn loop(app: App) void {
     texture.bind(0);
     shader.setUniform1i("u_Texture", 0);
 
-    shader.unbind();
+    defer shader.unbind();
 
     vao.bind();
     defer vao.destroy();
 
-    var view: glm.mat4 = undefined;
     var model: glm.mat4 = undefined;
     var projection: glm.mat4 = undefined;
 
@@ -182,12 +185,11 @@ pub fn loop(app: App) void {
         poses[i] = glm.vec3{ mx / 40, my / 40, mz / 50 };
     }
 
-    //const radius: f32 = 20.0;
     var rotAngle: f32 = 0.0;
-
     const io = ImGui.c.igGetIO();
-    //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
+
+    //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
     while (!app.window.shouldClose()) {
         const currentFrame: f32 = @floatCast(glfw.getTime());
         deltaTime = currentFrame - lastFrame;
@@ -198,16 +200,12 @@ pub fn loop(app: App) void {
         Renderer.clear();
         ImGui.newFrame();
 
-        var cameraTarget: glm.vec3 = undefined;
-        glm.glmc_vec3_add(&cameraPos, &cameraFront, &cameraTarget);
-
-        glm.glmc_mat4_identity(&view);
-        glm.glmc_lookat(&cameraPos, &cameraTarget, &cameraUp, &view);
+        camera.updateViewMatrix();
 
         const aspect: f32 = @as(f32, @floatFromInt(winSize.width)) / @as(f32, @floatFromInt(winSize.height));
         glm.glmc_perspective(glm.glm_rad(fov), aspect, 0.1, 100, &projection);
 
-        shader.setUniformMat4f("view", view);
+        shader.setUniformMat4f("view", camera.getViewMatrix());
         shader.setUniformMat4f("projection", projection);
 
         for (0..5) |i| {
@@ -229,11 +227,7 @@ pub fn loop(app: App) void {
         ImGui.c.igText("%.3f deltaTime", deltaTime);
         ImGui.c.igEnd();
 
-        _ = ImGui.c.igBegin("Debug", null, 0);
-        _ = ImGui.c.igSliderFloat("cam-x", &cameraPos[0], -10, 10);
-        _ = ImGui.c.igSliderFloat("cam-y", &cameraPos[1], -10, 10);
-        _ = ImGui.c.igSliderFloat("cam-z", &cameraPos[2], 0.1, 120);
-        ImGui.c.igEnd();
+        camera.imGuiDebugWindow();
 
         ImGui.render();
 
@@ -245,6 +239,8 @@ pub fn loop(app: App) void {
 }
 
 pub fn destroy(app: App) void {
+    log.info("Destroying application", .{});
+
     app.ImGuiCtx.destroy();
     gl.makeProcTableCurrent(null);
     glfw.makeContextCurrent(null);
@@ -255,49 +251,44 @@ pub fn destroy(app: App) void {
 var cursorHidden = true;
 var start: f32 = 0;
 fn handleInput(app: App) void {
-    if (app.window.getKey(glfw.Key.escape) == glfw.Action.press) {
+    if (app.window.getKey(glfw.Key.escape) == glfw.Action.press)
         app.window.setShouldClose(true);
-    }
 
     if (app.window.getKey(glfw.Key.left_control) == glfw.Action.press) blk: {
         if (glfw.getTime() - start < 0.5) break :blk;
 
+        log.debug("Mouse mode changed", .{});
+
         app.window.setInputMode(glfw.Window.InputMode.cursor, if (cursorHidden)
-            glfw.Window.InputModeCursor.normal
+            glfw.Window.InputModeCursor.captured
         else
             glfw.Window.InputModeCursor.disabled);
 
         if (!cursorHidden)
-            app.window.setCursorPos(mouseLastX, mouseLastY);
+            app.window.setCursorPos(camera.mouse.lastX, camera.mouse.lastY);
 
         cursorHidden = !cursorHidden;
         start = @floatCast(glfw.getTime());
     }
 
     const cameraSpeed: f32 = 5 * deltaTime;
-    if (app.window.getKey(glfw.Key.w) == glfw.Action.press) {
-        glm.glmc_vec3_muladds(&cameraFront, cameraSpeed, &cameraPos);
-    }
+    if (app.window.getKey(glfw.Key.w) == glfw.Action.press)
+        camera.moveInDirection(Camera.directions.up, cameraSpeed);
 
-    if (app.window.getKey(glfw.Key.s) == glfw.Action.press) {
-        glm.glmc_vec3_mulsubs(&cameraFront, cameraSpeed, &cameraPos);
-    }
+    if (app.window.getKey(glfw.Key.s) == glfw.Action.press)
+        camera.moveInDirection(Camera.directions.down, cameraSpeed);
 
-    if (app.window.getKey(glfw.Key.a) == glfw.Action.press) {
-        var left: glm.vec3 = undefined;
-        glm.glmc_vec3_crossn(&cameraFront, &cameraUp, &left);
-        glm.glmc_vec3_mulsubs(&left, cameraSpeed, &cameraPos);
-    }
+    if (app.window.getKey(glfw.Key.a) == glfw.Action.press)
+        camera.moveInDirection(Camera.directions.left, cameraSpeed);
 
-    if (app.window.getKey(glfw.Key.d) == glfw.Action.press) {
-        var right: glm.vec3 = undefined;
-        glm.glmc_vec3_crossn(&cameraUp, &cameraFront, &right);
-        glm.glmc_vec3_mulsubs(&right, cameraSpeed, &cameraPos);
-    }
+    if (app.window.getKey(glfw.Key.d) == glfw.Action.press)
+        camera.moveInDirection(Camera.directions.right, cameraSpeed);
 }
 
 var firstMouseCb = true;
-fn mouseCallback(_: glfw.Window, xpos: f64, ypos: f64) void {
+fn mouseCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
+    ImGui.igGlfw.cImGui_ImplGlfw_CursorPosCallback(@ptrCast(window.handle), xpos, ypos);
+
     if (firstMouseCb) {
         firstMouseCb = false;
         return;
@@ -305,75 +296,15 @@ fn mouseCallback(_: glfw.Window, xpos: f64, ypos: f64) void {
 
     if (!cursorHidden) return;
 
-    const xPos4: f32 = @floatCast(xpos);
-    const yPos4: f32 = @floatCast(ypos);
-
-    var xOffset: f32 = xPos4 - mouseLastX;
-    var yOffset: f32 = mouseLastY - yPos4;
-
-    mouseLastX = xPos4;
-    mouseLastY = yPos4;
-
-    const sensitivity: f32 = 0.1;
-    xOffset *= sensitivity;
-    yOffset *= sensitivity;
-
-    yaw += xOffset;
-    pitch = @min(@max(pitch + yOffset, -89.0), 89.0);
-
-    var direction: glm.vec3 = undefined;
-    direction[0] = @cos(glm.glm_rad(yaw)) * @cos(glm.glm_rad(pitch));
-    direction[1] = @sin(glm.glm_rad(pitch));
-    direction[2] = @sin(glm.glm_rad(yaw)) * @cos(glm.glm_rad(pitch));
-    glm.glmc_vec3_normalize(&direction);
-    glm.glmc_vec3_copy(&direction, &cameraFront);
+    camera.updateMousePosition(@floatCast(xpos), @floatCast(ypos));
 }
 
 fn scrollCallback(_: glfw.Window, _: f64, yoffset: f64) void {
-    fov = @min(@max(fov - @as(f32, @floatCast(yoffset)) * 2, 1), 90);
+    fov = std.math.clamp(fov - @as(f32, @floatCast(yoffset)) * 2, 1, 90);
 }
 
 fn frameBufferSizeCallback(_: glfw.Window, width: u32, height: u32) void {
     gl.Viewport(0, 0, @intCast(width), @intCast(height));
-}
-
-pub fn glDebugOutput(source: c_uint, debugType: c_uint, id: c_uint, severity: c_uint, _: c_int, message: [*:0]const u8, _: ?*const anyopaque) callconv(gl.APIENTRY) void {
-    if (id == 131169 or id == 131185 or id == 131218 or id == 131204) return;
-
-    const sourceString = switch (source) {
-        gl.DEBUG_SOURCE_API => "API",
-        gl.DEBUG_SOURCE_WINDOW_SYSTEM => "Window System",
-        gl.DEBUG_SOURCE_SHADER_COMPILER => "Shader Compiler",
-        gl.DEBUG_SOURCE_THIRD_PARTY => "Third Party",
-        gl.DEBUG_SOURCE_APPLICATION => "Application",
-        gl.DEBUG_SOURCE_OTHER => "Other",
-        else => "unknown",
-    };
-
-    const typeString = switch (debugType) {
-        gl.DEBUG_TYPE_ERROR => "Error",
-        gl.DEBUG_TYPE_DEPRECATED_BEHAVIOR => "Deprecated Behaviour",
-        gl.DEBUG_TYPE_UNDEFINED_BEHAVIOR => "Undefined Behaviour",
-        gl.DEBUG_TYPE_PORTABILITY => "Portability",
-        gl.DEBUG_TYPE_PERFORMANCE => "Performance",
-        gl.DEBUG_TYPE_MARKER => "Marker",
-        gl.DEBUG_TYPE_PUSH_GROUP => "Push Group",
-        gl.DEBUG_TYPE_POP_GROUP => "Pop Group",
-        gl.DEBUG_TYPE_OTHER => "Other",
-        else => "unknown",
-    };
-
-    const severityString = switch (severity) {
-        gl.DEBUG_SEVERITY_HIGH => "high",
-        gl.DEBUG_SEVERITY_MEDIUM => "medium",
-        gl.DEBUG_SEVERITY_LOW => "low",
-        gl.DEBUG_SEVERITY_NOTIFICATION => "notification",
-        else => "unknown",
-    };
-
-    std.debug.print("--------\n", .{});
-    std.debug.print("[GL_DEBUG] ({d}): {s}\n", .{ id, message });
-    std.debug.print("    Source: {s}\n    Type: {s}\n    Severity: {s}\n", .{ sourceString, typeString, severityString });
 }
 
 test "detect memory leak" {

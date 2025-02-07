@@ -1,6 +1,8 @@
 const std = @import("std");
 const gl = @import("gl");
 const stb = @cImport(@cInclude("stb_image.h"));
+const resLog = @import("utils.zig").scopes.resourceLog;
+const log = std.log;
 
 const Self = @This();
 
@@ -18,7 +20,7 @@ pub fn init(alloc: std.mem.Allocator, filePath: []const u8) !Self {
 
     const buffer = stb.stbi_load(filePath.ptr, @ptrCast(&result.width), @ptrCast(&result.height), @ptrCast(&result.bpp), 4);
     if (buffer == null) {
-        std.debug.print("Texture '{s}' not found.\n", .{filePath});
+        resLog.err("Texture '{s}' not found", .{filePath});
         return error.FileNotFound;
     }
 
@@ -34,6 +36,8 @@ pub fn init(alloc: std.mem.Allocator, filePath: []const u8) !Self {
 
     gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, result.width, result.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, buffer);
     gl.BindTexture(gl.TEXTURE_2D, 0);
+
+    resLog.info("Loaded texture {s} {d}x{d}", .{ filePath, result.width, result.height });
 
     return result;
 }
