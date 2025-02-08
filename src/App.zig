@@ -18,7 +18,7 @@ allocator: std.mem.Allocator,
 ImGuiCtx: ImGui,
 
 var scenes: [2]Scene.Scene = undefined;
-var sceneIdx: u32 = 0;
+var sceneSelector: Scene.SceneSelector = undefined;
 
 pub fn init(allocator: std.mem.Allocator) !App {
     log.info("Initializing application", .{});
@@ -54,6 +54,13 @@ pub fn init(allocator: std.mem.Allocator) !App {
 
     const imgGuiCtx = ImGui.init(window) catch unreachable;
 
+    window.setCursorPos(@floatFromInt(1440), @floatFromInt(1080));
+
+    window.setKeyCallback(keyCallback);
+    window.setCursorPosCallback(mouseCallback);
+    window.setScrollCallback(scrollCallback);
+    window.setInputMode(glfw.Window.InputMode.cursor, glfw.Window.InputModeCursor.disabled);
+
     // Debug callback setup
     var flags: c_int = undefined;
     gl.GetIntegerv(gl.CONTEXT_FLAGS, @ptrCast(&flags));
@@ -72,13 +79,14 @@ pub fn init(allocator: std.mem.Allocator) !App {
 
     log.info("Initializing scene: Default Scene", .{});
     const defaultScene = Scene.DefaultScene.init(allocator, window);
+
     log.info("Initializing scene: Other Scene", .{});
     const otherScene = Scene.OtherScene.init(allocator, window);
-    const sceneObj = Scene.Scene{ .defaultScene = defaultScene };
-    const otherObj = Scene.Scene{ .otherScene = otherScene };
 
-    scenes[0] = sceneObj;
-    scenes[1] = otherObj;
+    scenes[0] = .{ .defaultScene = defaultScene };
+    scenes[1] = .{ .otherScene = otherScene };
+
+    sceneSelector = Scene.SceneSelector.init(&scenes);
 
     log.info("Initalization done", .{});
 
@@ -90,14 +98,6 @@ var lastFrame: f32 = 0;
 var lastSceneIdx: u32 = 0;
 
 pub fn loop(app: App) void {
-    var winSize = app.window.getFramebufferSize();
-    app.window.setCursorPos(@floatFromInt(winSize.width), @floatFromInt(winSize.height));
-    gl.Enable(gl.DEPTH_TEST);
-
-    app.window.setInputMode(glfw.Window.InputMode.cursor, glfw.Window.InputModeCursor.disabled);
-    app.window.setScrollCallback(scrollCallback);
-    app.window.setCursorPosCallback(mouseCallback);
-
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
 
     //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
@@ -106,9 +106,9 @@ pub fn loop(app: App) void {
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        if (lastSceneIdx != sceneIdx) {
+        if (lastSceneIdx != sceneSelector.sceneIdx) {
             app.handleSceneChange();
-            lastSceneIdx = sceneIdx;
+            lastSceneIdx = sceneSelector.sceneIdx;
         }
 
         app.handleInput();
@@ -116,14 +116,12 @@ pub fn loop(app: App) void {
         Renderer.clear();
         ImGui.newFrame();
 
-        scenes[sceneIdx].draw(deltaTime);
-        //scene.draw(deltaTime);
+        sceneSelector.currentScene().draw(deltaTime);
 
         imGuiDebugInfo(ImGui.c.igGetIO());
 
         ImGui.render();
 
-        winSize = app.window.getFramebufferSize();
         app.window.swapBuffers();
 
         glfw.pollEvents();
@@ -133,8 +131,7 @@ pub fn loop(app: App) void {
 pub fn destroy(app: App) void {
     log.info("Destroying application", .{});
 
-    scenes[sceneIdx].destroy();
-    //scene.destroy();
+    sceneSelector.destroyScenes();
     app.ImGuiCtx.destroy();
     gl.makeProcTableCurrent(null);
     glfw.makeContextCurrent(null);
@@ -142,69 +139,54 @@ pub fn destroy(app: App) void {
     glfw.terminate();
 }
 
-var cursorHidden = true;
-var start: f32 = 0;
-var startTwo: f32 = 0;
 fn handleInput(app: App) void {
-    if (app.window.getKey(glfw.Key.escape) == glfw.Action.press)
-        app.window.setShouldClose(true);
+    sceneSelector.currentScene().handleInput(app.window, deltaTime);
+}
 
-    if (app.window.getKey(glfw.Key.tab) == glfw.Action.press) blk: {
-        if (glfw.getTime() - startTwo < 0.2) break :blk;
+var cursorHidden = true;
+fn keyCallback(window: glfw.Window, key: glfw.Key, _: i32, action: glfw.Action, _: glfw.Mods) void {
+    if (key == glfw.Key.escape and action == glfw.Action.press)
+        window.setShouldClose(true);
 
-        sceneIdx = (sceneIdx + 1) % @as(u32, @intCast(scenes.len));
+    if (key == glfw.Key.tab and action == glfw.Action.press) {
+        sceneSelector.nextScene();
 
         if (cursorHidden) {
-            const winSize = app.window.getSize();
-            app.window.setCursorPos(@floatFromInt(winSize.width / 2), @floatFromInt(winSize.height / 2));
+            const winSize = window.getSize();
+            window.setCursorPos(@floatFromInt(winSize.width / 2), @floatFromInt(winSize.height / 2));
         }
-
-        startTwo = @floatCast(glfw.getTime());
     }
 
-    if (app.window.getKey(glfw.Key.left_control) == glfw.Action.press) blk: {
-        if (glfw.getTime() - start < 0.5) break :blk;
-
+    if (key == glfw.Key.left_control and action == glfw.Action.press) {
         log.debug("Mouse mode changed", .{});
 
-        app.window.setInputMode(glfw.Window.InputMode.cursor, if (cursorHidden)
+        window.setInputMode(glfw.Window.InputMode.cursor, if (cursorHidden)
             glfw.Window.InputModeCursor.captured
         else
             glfw.Window.InputModeCursor.disabled);
 
         if (!cursorHidden)
-            app.window.setCursorPos(lastX, lastY);
+            window.setCursorPos(lastX, lastY);
 
         cursorHidden = !cursorHidden;
-        start = @floatCast(glfw.getTime());
     }
-
-    scenes[sceneIdx].handleInput(app.window, deltaTime);
-    //app.scene.handleInput(app.window, deltaTime);
 }
 
-var firstMouseCb = true;
 var lastX: f32 = 0;
 var lastY: f32 = 0;
 fn mouseCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
     ImGui.igGlfw.cImGui_ImplGlfw_CursorPosCallback(@ptrCast(window.handle), xpos, ypos);
-
-    log.debug("{d} {d}", .{ xpos, ypos });
-    if (firstMouseCb) {
-        firstMouseCb = false;
-        return;
-    }
 
     if (!cursorHidden) return;
 
     lastX = @floatCast(xpos);
     lastY = @floatCast(ypos);
 
-    scenes[sceneIdx].handleMouse(@floatCast(xpos), @floatCast(ypos));
+    sceneSelector.currentScene().handleMouse(@floatCast(xpos), @floatCast(ypos));
 }
 
 fn scrollCallback(_: glfw.Window, xoffset: f64, yoffset: f64) void {
-    scenes[sceneIdx].handleScroll(@floatCast(xoffset), @floatCast(yoffset));
+    sceneSelector.currentScene().handleScroll(@floatCast(xoffset), @floatCast(yoffset));
 }
 
 fn frameBufferSizeCallback(_: glfw.Window, width: u32, height: u32) void {
@@ -215,8 +197,8 @@ fn handleSceneChange(app: App) void {
     const winSize = app.window.getSize();
     lastX = @as(f32, @floatFromInt(winSize.width)) / 2;
     lastY = @as(f32, @floatFromInt(winSize.height)) / 2;
-    scenes[sceneIdx].onSceneRenentry();
-    log.debug("Switched to scene {d}", .{sceneIdx});
+    sceneSelector.currentScene().onSceneRenentry();
+    log.debug("Switched to scene {d}", .{sceneSelector.sceneIdx});
 }
 
 fn imGuiDebugInfo(io: *ImGui.c.ImGuiIO) void {
@@ -231,7 +213,7 @@ fn imGuiDebugInfo(io: *ImGui.c.ImGuiIO) void {
         sceneNames[i] = scenes[i].getSceneName().ptr;
     }
     _ = ImGui.c.igBegin("Scene selector", null, 0);
-    _ = ImGui.c.igListBox("##", @ptrCast(&sceneIdx), &sceneNames, sceneNames.len, 4);
+    _ = ImGui.c.igListBox("##", @ptrCast(&sceneSelector.sceneIdx), &sceneNames, sceneNames.len, 4);
     ImGui.c.igEnd();
 
     //ImGui.c.igShowDemoWindow(null);

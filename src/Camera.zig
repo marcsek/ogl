@@ -13,24 +13,23 @@ pub const directions = enum {
 };
 
 pub const Mouse = struct {
-    fov: f32,
-    yaw: f32,
-    pitch: f32,
+    fov: f32 = 45,
+    yaw: f32 = -90,
+    pitch: f32 = 0,
     lastX: f32 = 0,
     lastY: f32 = 0,
 };
 
 viewMatrix: glm.mat4 = undefined,
-
 mouse: Mouse,
-
-position: glm.vec3 = .{ 0, 0, 20 },
+position: glm.vec3,
 front: glm.vec3 = .{ 0, 0, -1 },
 up: glm.vec3 = .{ 0, 1, 0 },
 
-pub fn init(fov: f32) Self {
+pub fn init(fov: f32, pos: glm.vec3) Self {
     var result = Self{
-        .mouse = .{ .fov = fov, .yaw = -90, .pitch = 0 },
+        .mouse = .{ .fov = fov },
+        .position = pos,
     };
 
     glm.glmc_mat4_identity(&result.viewMatrix);
@@ -88,15 +87,14 @@ pub fn updateMousePosition(cam: *Self, xPos: f32, yPos: f32) void {
     glm.glmc_vec3_copy(&direction, &cam.front);
 }
 
-pub fn resetMousePosition(cam: *Self, viewWidth: f32, viewHeight: f32) void {
-    cam.mouse.lastX = viewWidth / 2;
-    cam.mouse.lastY = viewHeight / 2;
-    cam.mouse.fov = 45;
-    cam.mouse.yaw = -90;
-    cam.mouse.pitch = 0;
-    cam.position = .{ 0, 0, 20 };
+pub fn setPosition(cam: *Self, newPosition: glm.vec3) void {
+    cam.position = newPosition;
     cam.front = .{ 0, 0, -1 };
     cam.up = .{ 0, 1, 0 };
+}
+
+pub fn resetMousePosition(cam: *Self, viewWidth: f32, viewHeight: f32) void {
+    cam.mouse = Mouse{ .lastX = viewWidth / 2, .lastY = viewHeight / 2 };
 }
 
 pub fn imGuiDebugWindow(cam: *Self) void {
