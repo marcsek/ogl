@@ -1,6 +1,6 @@
 const math = @import("std").math;
 const glfw = @import("mach-glfw");
-const glm = @import("glm.zig").unaligned;
+const glm = @import("glm.zig");
 const ImGui = @import("imgui.zig");
 
 const Self = @This();
@@ -86,6 +86,17 @@ pub fn updateMousePosition(cam: *Self, xPos: f32, yPos: f32) void {
     direction[2] = @sin(glm.glm_rad(cam.mouse.yaw)) * @cos(glm.glm_rad(cam.mouse.pitch));
     glm.glmc_vec3_normalize(&direction);
     glm.glmc_vec3_copy(&direction, &cam.front);
+}
+
+pub fn resetMousePosition(cam: *Self, viewWidth: f32, viewHeight: f32) void {
+    cam.mouse.lastX = viewWidth / 2;
+    cam.mouse.lastY = viewHeight / 2;
+    cam.mouse.fov = 45;
+    cam.mouse.yaw = -90;
+    cam.mouse.pitch = 0;
+    cam.position = .{ 0, 0, 20 };
+    cam.front = .{ 0, 0, -1 };
+    cam.up = .{ 0, 1, 0 };
 }
 
 pub fn imGuiDebugWindow(cam: *Self) void {

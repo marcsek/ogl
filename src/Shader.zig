@@ -1,6 +1,6 @@
 const std = @import("std");
 const gl = @import("gl");
-const glm = @import("glm.zig").unaligned;
+const glm = @import("glm.zig");
 const alloc = std.heap.c_allocator;
 const log = std.log;
 
