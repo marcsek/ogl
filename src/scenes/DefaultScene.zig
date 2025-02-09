@@ -90,6 +90,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 pub fn draw(scene: *Self, dt: f32) void {
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
 
+    scene.texture.bind(0);
     scene.vao.bind();
     var winSize = scene.window.getFramebufferSize();
     scene.camera.updateViewMatrix();
@@ -118,6 +119,7 @@ pub fn draw(scene: *Self, dt: f32) void {
     scene.rotAngle += 3 * dt;
 
     scene.camera.imGuiDebugWindow();
+    scene.texture.unbind();
 
     winSize = scene.window.getFramebufferSize();
 }

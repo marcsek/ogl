@@ -17,7 +17,7 @@ window: glfw.Window,
 allocator: std.mem.Allocator,
 ImGuiCtx: ImGui,
 
-var scenes: [2]Scene.Scene = undefined;
+var scenes: [3]Scene.Scene = undefined;
 var sceneSelector: Scene.SceneSelector = undefined;
 
 pub fn init(allocator: std.mem.Allocator) !App {
@@ -83,11 +83,14 @@ pub fn init(allocator: std.mem.Allocator) !App {
     log.info("Initializing scene: Lighting Scene", .{});
     const lightingScene = Scene.LightingScene.init(allocator, window);
 
+    log.info("Initializing scene: Lighting Texture Scene", .{});
+    const lightingTexScene = Scene.LightingTexScene.init(allocator, window);
+
     scenes[0] = .{ .defaultScene = defaultScene };
     scenes[1] = .{ .lightingScene = lightingScene };
+    scenes[2] = .{ .lightingTexScene = lightingTexScene };
 
     sceneSelector = Scene.SceneSelector.init(&scenes);
-    sceneSelector.nextScene();
 
     log.info("Initalization done", .{});
 

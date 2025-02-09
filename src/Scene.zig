@@ -13,10 +13,12 @@ const glm = @import("glm.zig");
 const cube = @import("shapes.zig").cube;
 pub const DefaultScene = @import("scenes/DefaultScene.zig");
 pub const LightingScene = @import("scenes/LightingScene.zig");
+pub const LightingTexScene = @import("scenes/LightTexScene.zig");
 
 pub const Scene = union(enum) {
     defaultScene: DefaultScene,
     lightingScene: LightingScene,
+    lightingTexScene: LightingTexScene,
     null: void,
 
     pub fn draw(self: *Scene, dt: f32) void {
@@ -73,7 +75,7 @@ pub const SceneSelector = struct {
     const Self = @This();
 
     scenes: []Scene,
-    sceneIdx: u32 = 0,
+    sceneIdx: u32 = 2,
 
     pub fn init(inScenes: []Scene) Self {
         return Self{ .scenes = inScenes };

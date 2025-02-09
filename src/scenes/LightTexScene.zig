@@ -29,6 +29,8 @@ lightPos: glm.vec3,
 lightColor: glm.vec3,
 cubeColor: glm.vec3,
 rotAngle: f32,
+texture: Texture,
+textureSpec: Texture,
 
 const Self = @This();
 
@@ -40,13 +42,14 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     var vaoCube = va.init();
     errdefer va.destroy();
 
-    var vboCube = vb.init(&cube.verticesNormals, 4 * 6 * 6 * @sizeOf(f32));
+    var vboCube = vb.init(&cube.verticesNormalsTex, 4 * 6 * 8 * @sizeOf(f32));
     errdefer vboCube.destroy();
 
     var vbloCube = vbl.init(alloc);
     defer vbloCube.destroy();
     vbloCube.push(3) catch unreachable;
     vbloCube.push(3) catch unreachable;
+    vbloCube.push(2) catch unreachable;
 
     vaoCube.addBuffer(vboCube, vbloCube);
 
@@ -68,8 +71,22 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     var shaderDefault = Shader.init("./res/shaders/defaultVert.glsl", "./res/shaders/defaultFrag.glsl") catch unreachable;
     errdefer shaderDefault.destroy();
 
-    var shaderLight = Shader.init("./res/shaders/lightVert.glsl", "./res/shaders/lightFrag.glsl") catch unreachable;
+    var shaderLight = Shader.init("./res/shaders/lightTexVert.glsl", "./res/shaders/lightTexFrag.glsl") catch unreachable;
     errdefer shaderLight.destroy();
+
+    shaderLight.bind();
+    const texture = Texture.init(alloc, "./res/textures/container.png") catch unreachable;
+    errdefer texture.destroy();
+    const textureSpec = Texture.init(alloc, "./res/textures/container_specular.png") catch unreachable;
+    errdefer textureSpec.destroy();
+    const textureEmis = Texture.init(alloc, "./res/textures/emmission.jpg") catch unreachable;
+    errdefer textureSpec.destroy();
+    texture.bind(0);
+    textureSpec.bind(1);
+    textureEmis.bind(2);
+    shaderLight.setUniform1i("material.diffuse", 0);
+    shaderLight.setUniform1i("material.specular", 1);
+    shaderLight.setUniform1i("material.emission", 2);
 
     var camera = Camera.init(45, .{ 0, 0, 7 });
     camera.mouse.lastX = @as(f32, @floatFromInt(winSize.width)) / 2;
@@ -91,11 +108,15 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
         .lightColor = .{ 1.0, 1.0, 1.0 },
         .cubeColor = .{ 1.0, 0.5, 0.31 },
         .rotAngle = 0,
+        .texture = texture,
+        .textureSpec = textureSpec,
     };
 }
 
 pub fn draw(scene: *Self, dt: f32) void {
     Renderer.setClearColor(0.1, 0.1, 0.1, 1);
+    gl.Enable(gl.BLEND);
+    gl.BlendFunc(gl.DST_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
     var winSize = scene.window.getFramebufferSize();
 
@@ -108,6 +129,9 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     const aspect: f32 = @as(f32, @floatFromInt(winSize.width)) / @as(f32, @floatFromInt(winSize.height));
     glm.glmc_perspective(glm.glm_rad(scene.fov), aspect, 0.1, 100, &projection);
+
+    scene.texture.bind(0);
+    scene.textureSpec.bind(1);
 
     var lightScale: glm.vec3 = .{ 0.3, 0.3, 0.3 };
     const lightR, const lightG, const lightB = scene.lightColor;
@@ -136,11 +160,8 @@ pub fn draw(scene: *Self, dt: f32) void {
     scene.shaderLight.setUniformMat4f("model", model);
     Renderer.draw(scene.vaoCube, scene.ibo, scene.shaderLight);
 
-    const objectR, const objectG, const objectB = scene.cubeColor;
-    scene.shaderLight.setUniform3f("material.ambient", objectR, objectG, objectB);
-    scene.shaderLight.setUniform3f("material.diffuse", objectR, objectG, objectB);
-    scene.shaderLight.setUniform3f("material.specular", 0.5, 0.5, 0.5);
-    scene.shaderLight.setUniform1f("material.shininess", 32);
+    //scene.shaderLight.setUniform3f("material.specular", 0.5, 0.5, 0.5);
+    scene.shaderLight.setUniform1f("material.shininess", 64);
 
     var lightPosView: glm.vec3 = undefined;
     var viewMatrix: glm.mat4 = scene.camera.getViewMatrix();
@@ -155,14 +176,16 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     _ = ImGui.c.igBegin("Scene controls", null, 0);
     _ = ImGui.c.igColorEdit3("Light color", &scene.lightColor, 0);
-    _ = ImGui.c.igColorEdit3("Cube color", &scene.cubeColor, 0);
     _ = ImGui.c.igSliderFloat3("Light position", &scene.lightPos, -10, 10);
     ImGui.c.igEnd();
 
     winSize = scene.window.getFramebufferSize();
+    gl.Disable(gl.BLEND);
 }
 
 pub fn destroy(scene: *Self) void {
+    scene.textureSpec.destroy();
+    scene.texture.destroy();
     scene.vboCube.destroy();
     scene.vboLight.destroy();
     scene.vaoCube.destroy();
@@ -202,5 +225,5 @@ pub fn handleScroll(scene: *Self, _: f32, yOffset: f32) void {
 }
 
 pub fn getSceneName(_: *Self) []const u8 {
-    return "Lighting Scene";
+    return "Lighting Texture scene";
 }
