@@ -98,7 +98,7 @@ pub fn resetMousePosition(cam: *Self, viewWidth: f32, viewHeight: f32) void {
 }
 
 pub fn imGuiDebugWindow(cam: *Self) void {
-    _ = ImGui.c.igBegin("Camera Controls", null, 0);
+    _ = ImGui.c.igBegin("Scene controls", null, 0);
     _ = ImGui.c.igSliderFloat("cam-x", &cam.position[0], -10, 10);
     _ = ImGui.c.igSliderFloat("cam-y", &cam.position[1], -10, 10);
     _ = ImGui.c.igSliderFloat("cam-z", &cam.position[2], 0.1, 120);

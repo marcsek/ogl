@@ -26,6 +26,14 @@ pub fn setUniform1i(shader: *Self, name: [:0]const u8, value: i32) void {
     gl.Uniform1i(shader.getUniformLocation(name), value);
 }
 
+pub fn setUniform1f(shader: *Self, name: [:0]const u8, value: f32) void {
+    gl.Uniform1f(shader.getUniformLocation(name), value);
+}
+
+pub fn setUniform3f(shader: *Self, name: [:0]const u8, v0: f32, v1: f32, v2: f32) void {
+    gl.Uniform3f(shader.getUniformLocation(name), v0, v1, v2);
+}
+
 pub fn setUniform4f(shader: *Self, name: [:0]const u8, v0: f32, v1: f32, v2: f32, v3: f32) void {
     gl.Uniform4f(shader.getUniformLocation(name), v0, v1, v2, v3);
 }

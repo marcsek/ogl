@@ -36,7 +36,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     var vao = va.init();
     errdefer va.destroy();
 
-    var vbo = vb.init(&cube.vertices, 4 * 6 * 5 * @sizeOf(f32));
+    var vbo = vb.init(&cube.verticesTexCoords, 4 * 6 * 5 * @sizeOf(f32));
     errdefer vbo.destroy();
 
     var vblo = vbl.init(alloc);
@@ -50,7 +50,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     var ibo = ib.init(&cube.indices, 6 * 6);
     errdefer ibo.destroy();
 
-    var shader = Shader.init("./res/shaders/vert.glsl", "./res/shaders/frag.glsl") catch unreachable;
+    var shader = Shader.init("./res/shaders/texVert.glsl", "./res/shaders/texFrag.glsl") catch unreachable;
     errdefer shader.destroy();
     shader.bind();
 
@@ -88,6 +88,8 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 }
 
 pub fn draw(scene: *Self, dt: f32) void {
+    Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
+
     scene.vao.bind();
     var winSize = scene.window.getFramebufferSize();
     scene.camera.updateViewMatrix();
@@ -100,6 +102,7 @@ pub fn draw(scene: *Self, dt: f32) void {
     const aspect: f32 = @as(f32, @floatFromInt(winSize.width)) / @as(f32, @floatFromInt(winSize.height));
     glm.glmc_perspective(glm.glm_rad(scene.fov), aspect, 0.1, 100, &projection);
 
+    scene.shader.bind();
     scene.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
     scene.shader.setUniformMat4f("projection", projection);
 

@@ -12,11 +12,11 @@ const Renderer = @import("Renderer.zig");
 const glm = @import("glm.zig");
 const cube = @import("shapes.zig").cube;
 pub const DefaultScene = @import("scenes/DefaultScene.zig");
-pub const OtherScene = @import("scenes/OtherScene.zig");
+pub const LightingScene = @import("scenes/LightingScene.zig");
 
 pub const Scene = union(enum) {
     defaultScene: DefaultScene,
-    otherScene: OtherScene,
+    lightingScene: LightingScene,
     null: void,
 
     pub fn draw(self: *Scene, dt: f32) void {
@@ -50,7 +50,7 @@ pub const Scene = union(enum) {
     pub fn handleScroll(self: *Scene, xOffset: f32, yOffset: f32) void {
         switch (self.*) {
             .null => {},
-            inline else => |*impl| return impl.handleMouse(xOffset, yOffset),
+            inline else => |*impl| return impl.handleScroll(xOffset, yOffset),
         }
     }
 

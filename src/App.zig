@@ -80,13 +80,14 @@ pub fn init(allocator: std.mem.Allocator) !App {
     log.info("Initializing scene: Default Scene", .{});
     const defaultScene = Scene.DefaultScene.init(allocator, window);
 
-    log.info("Initializing scene: Other Scene", .{});
-    const otherScene = Scene.OtherScene.init(allocator, window);
+    log.info("Initializing scene: Lighting Scene", .{});
+    const lightingScene = Scene.LightingScene.init(allocator, window);
 
     scenes[0] = .{ .defaultScene = defaultScene };
-    scenes[1] = .{ .otherScene = otherScene };
+    scenes[1] = .{ .lightingScene = lightingScene };
 
     sceneSelector = Scene.SceneSelector.init(&scenes);
+    sceneSelector.nextScene();
 
     log.info("Initalization done", .{});
 
@@ -98,7 +99,6 @@ var lastFrame: f32 = 0;
 var lastSceneIdx: u32 = 0;
 
 pub fn loop(app: App) void {
-    Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
 
     //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
     while (!app.window.shouldClose()) {
