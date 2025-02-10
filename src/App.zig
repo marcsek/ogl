@@ -54,7 +54,8 @@ pub fn init(allocator: std.mem.Allocator) !App {
 
     const imgGuiCtx = ImGui.init(window) catch unreachable;
 
-    window.setCursorPos(@floatFromInt(1440), @floatFromInt(1080));
+    const winSize = window.getSize();
+    window.setCursorPos(@as(f32, @floatFromInt(winSize.width)) / 2.0, @as(f32, @floatFromInt(winSize.height)) / 2.0);
 
     window.setKeyCallback(keyCallback);
     window.setCursorPosCallback(mouseCallback);
@@ -99,7 +100,7 @@ pub fn init(allocator: std.mem.Allocator) !App {
 
 var deltaTime: f32 = 0;
 var lastFrame: f32 = 0;
-var lastSceneIdx: u32 = 0;
+var lastSceneIdx: u32 = 2;
 
 pub fn loop(app: App) void {
 
