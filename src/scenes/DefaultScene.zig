@@ -1,10 +1,10 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
 const Shader = @import("../Shader.zig");
 const Texture = @import("../Texture.zig");
 const Camera = @import("../Camera.zig");
-const ImGui = @import("../imgui.zig");
 const Renderer = @import("../Renderer.zig");
 const glm = @import("../glm.zig");
 const cube = @import("../shapes.zig").cube;
@@ -94,7 +94,9 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     scene.rotAngle += 3 * dt;
 
-    scene.camera.imGuiDebugWindow();
+    if (comptime builtin.mode == .Debug)
+        scene.camera.imGuiDebugWindow();
+
     scene.texture.unbind();
 
     winSize = scene.window.getFramebufferSize();

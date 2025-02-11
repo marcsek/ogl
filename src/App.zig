@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const gl = @import("gl");
 const glfw = @import("mach-glfw");
 const Renderer = @import("Renderer.zig");
@@ -16,7 +17,7 @@ const App = @This();
 
 window: glfw.Window,
 allocator: std.mem.Allocator,
-ImGuiCtx: ImGui,
+ImGuiCtx: if (builtin.mode == .Debug) ImGui else void,
 
 var scenes: [3]Scene.Scene = undefined;
 var sceneSelector: Scene.SceneSelector = undefined;
@@ -54,7 +55,7 @@ pub fn init(allocator: std.mem.Allocator) !App {
     gl.makeProcTableCurrent(&gl_procs);
     errdefer gl.makeProcTableCurrent(null);
 
-    const imgGuiCtx = ImGui.init(window) catch unreachable;
+    const imgGuiCtx = if (comptime builtin.mode == .Debug) ImGui.init(window) catch unreachable else void;
 
     const winSize = window.getSize();
     window.setCursorPos(@as(f32, @floatFromInt(winSize.width)) / 2.0, @as(f32, @floatFromInt(winSize.height)) / 2.0);
@@ -97,7 +98,7 @@ pub fn init(allocator: std.mem.Allocator) !App {
 
     log.info("Initalization done", .{});
 
-    return App{ .window = window, .allocator = allocator, .ImGuiCtx = imgGuiCtx };
+    return App{ .window = window, .allocator = allocator, .ImGuiCtx = if (comptime builtin.mode == .Debug) imgGuiCtx else {} };
 }
 
 var deltaTime: f32 = 0;
@@ -120,13 +121,16 @@ pub fn loop(app: App) void {
         app.handleInput();
 
         Renderer.clear();
-        ImGui.newFrame();
+        if (comptime builtin.mode == .Debug)
+            ImGui.newFrame();
 
         sceneSelector.currentScene().draw(deltaTime);
 
-        imGuiDebugInfo(ImGui.c.igGetIO());
+        if (comptime builtin.mode == .Debug)
+            imGuiDebugInfo(ImGui.c.igGetIO());
 
-        ImGui.render();
+        if (comptime builtin.mode == .Debug)
+            ImGui.render();
 
         app.window.swapBuffers();
 
@@ -138,7 +142,8 @@ pub fn destroy(app: App) void {
     log.info("Destroying application", .{});
 
     sceneSelector.destroyScenes();
-    app.ImGuiCtx.destroy();
+    if (comptime builtin.mode == .Debug)
+        app.ImGuiCtx.destroy();
     gl.makeProcTableCurrent(null);
     glfw.makeContextCurrent(null);
     app.window.destroy();
@@ -181,7 +186,8 @@ fn keyCallback(window: glfw.Window, key: glfw.Key, _: i32, action: glfw.Action, 
 var lastX: f32 = 0;
 var lastY: f32 = 0;
 fn mouseCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
-    ImGui.igGlfw.cImGui_ImplGlfw_CursorPosCallback(@ptrCast(window.handle), xpos, ypos);
+    if (comptime builtin.mode == .Debug)
+        ImGui.igGlfw.cImGui_ImplGlfw_CursorPosCallback(@ptrCast(window.handle), xpos, ypos);
 
     if (!cursorHidden) return;
 
@@ -208,21 +214,23 @@ fn handleSceneChange(app: App) void {
 }
 
 fn imGuiDebugInfo(io: *ImGui.c.ImGuiIO) void {
-    ImGui.c.igSetNextWindowPos(.{ .x = io.*.DisplaySize.x - 200, .y = 5 }, ImGui.c.ImGuiCond_Always);
-    ImGui.c.igSetNextWindowSize(.{ .x = 0, .y = 50 }, ImGui.c.ImGuiCond_Always);
-    _ = ImGui.c.igBegin("Framerate", null, ImGui.c.ImGuiWindowFlags_NoDecoration | ImGui.c.ImGuiWindowFlags_NoBackground | ImGui.c.ImGuiWindowFlags_NoInputs);
-    ImGui.c.igText("%.3f ms/frame (%.1f FPS)", 1000.0 / io.*.Framerate, io.*.Framerate);
-    ImGui.c.igText("%.3f deltaTime", deltaTime);
-    ImGui.c.igEnd();
-    var sceneNames: [scenes.len][*c]const u8 = undefined;
-    for (0..scenes.len) |i| {
-        sceneNames[i] = scenes[i].getSceneName().ptr;
-    }
-    _ = ImGui.c.igBegin("Scene selector", null, 0);
-    _ = ImGui.c.igListBox("##", @ptrCast(&sceneSelector.sceneIdx), &sceneNames, sceneNames.len, 4);
-    ImGui.c.igEnd();
+    if (comptime builtin.mode == .Debug) {
+        ImGui.c.igSetNextWindowPos(.{ .x = io.*.DisplaySize.x - 200, .y = 5 }, ImGui.c.ImGuiCond_Always);
+        ImGui.c.igSetNextWindowSize(.{ .x = 0, .y = 50 }, ImGui.c.ImGuiCond_Always);
+        _ = ImGui.c.igBegin("Framerate", null, ImGui.c.ImGuiWindowFlags_NoDecoration | ImGui.c.ImGuiWindowFlags_NoBackground | ImGui.c.ImGuiWindowFlags_NoInputs);
+        ImGui.c.igText("%.3f ms/frame (%.1f FPS)", 1000.0 / io.*.Framerate, io.*.Framerate);
+        ImGui.c.igText("%.3f deltaTime", deltaTime);
+        ImGui.c.igEnd();
+        var sceneNames: [scenes.len][*c]const u8 = undefined;
+        for (0..scenes.len) |i| {
+            sceneNames[i] = scenes[i].getSceneName().ptr;
+        }
+        _ = ImGui.c.igBegin("Scene selector", null, 0);
+        _ = ImGui.c.igListBox("##", @ptrCast(&sceneSelector.sceneIdx), &sceneNames, sceneNames.len, 4);
+        ImGui.c.igEnd();
 
-    //ImGui.c.igShowDemoWindow(null);
+        //ImGui.c.igShowDemoWindow(null);
+    }
 }
 
 test "detect memory leak" {
