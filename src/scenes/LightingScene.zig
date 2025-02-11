@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
 const vb = @import("../VertexBuffer.zig");
@@ -154,7 +153,7 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     scene.rotAngle += 3 * dt;
 
-    if (comptime builtin.mode == .Debug) {
+    if (ImGui.enabled) {
         _ = ImGui.c.igBegin("Scene controls", null, 0);
         _ = ImGui.c.igColorEdit3("Light color", &scene.lightColor, 0);
         _ = ImGui.c.igColorEdit3("Cube color", &scene.cubeColor, 0);

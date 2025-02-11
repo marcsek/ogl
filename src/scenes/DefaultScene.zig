@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
+const ImGui = @import("../imgui.zig");
 const Shader = @import("../Shader.zig");
 const Texture = @import("../Texture.zig");
 const Camera = @import("../Camera.zig");
@@ -94,7 +95,7 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     scene.rotAngle += 3 * dt;
 
-    if (comptime builtin.mode == .Debug)
+    if (ImGui.enabled)
         scene.camera.imGuiDebugWindow();
 
     scene.texture.unbind();

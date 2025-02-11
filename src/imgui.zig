@@ -1,18 +1,21 @@
-const builtin = @import("builtin");
+const options = @import("options");
+pub const enabled = options.imgui;
+
+const std = @import("std");
 const glfw = @import("mach-glfw");
-pub const c = if (builtin.mode == .Debug) @cImport(@cInclude("dcimgui.h")) else struct {};
-pub const igOpenGl = if (builtin.mode == .Debug) @cImport(@cInclude("dcimgui_impl_opengl3.h")) else struct {};
-pub const igGlfw = if (builtin.mode == .Debug) @cImport({
+pub const c = if (enabled) @cImport(@cInclude("dcimgui.h")) else struct {};
+pub const igOpenGl = if (enabled) @cImport(@cInclude("dcimgui_impl_opengl3.h")) else struct {};
+pub const igGlfw = if (enabled) @cImport({
     @cInclude("GLFW/glfw3.h");
     @cInclude("dcimgui_impl_glfw.h");
 }) else struct {};
 
 const Self = @This();
 
-ImGuiCtx: if (builtin.mode == .Debug) *c.ImGuiContext else void,
+ImGuiCtx: if (enabled) *c.ImGuiContext else void,
 
 pub fn init(window: glfw.Window) !Self {
-    if (builtin.mode != .Debug)
+    if (!enabled)
         return;
 
     const ctx = c.igCreateContext(null) orelse return error.ImGuiInitFailed;
@@ -29,7 +32,7 @@ pub fn init(window: glfw.Window) !Self {
 }
 
 pub fn newFrame() void {
-    if (builtin.mode != .Debug)
+    if (!enabled)
         return;
 
     igOpenGl.cImGui_ImplOpenGL3_NewFrame();
@@ -38,7 +41,7 @@ pub fn newFrame() void {
 }
 
 pub fn render() void {
-    if (builtin.mode != .Debug)
+    if (!enabled)
         return;
 
     c.igRender();
@@ -46,7 +49,7 @@ pub fn render() void {
 }
 
 pub fn destroy(ig: Self) void {
-    if (builtin.mode != .Debug)
+    if (!enabled)
         return;
 
     igOpenGl.cImGui_ImplOpenGL3_Shutdown();

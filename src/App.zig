@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const gl = @import("gl");
 const glfw = @import("mach-glfw");
 const Renderer = @import("Renderer.zig");
@@ -17,7 +16,7 @@ const App = @This();
 
 window: glfw.Window,
 allocator: std.mem.Allocator,
-ImGuiCtx: if (builtin.mode == .Debug) ImGui else void,
+ImGuiCtx: if (ImGui.enabled) ImGui else void,
 
 var scenes: [3]Scene.Scene = undefined;
 var sceneSelector: Scene.SceneSelector = undefined;
@@ -55,7 +54,7 @@ pub fn init(allocator: std.mem.Allocator) !App {
     gl.makeProcTableCurrent(&gl_procs);
     errdefer gl.makeProcTableCurrent(null);
 
-    const imgGuiCtx = if (comptime builtin.mode == .Debug) ImGui.init(window) catch unreachable else void;
+    const imgGuiCtx = if (ImGui.enabled) ImGui.init(window) catch unreachable else {};
 
     const winSize = window.getSize();
     window.setCursorPos(@as(f32, @floatFromInt(winSize.width)) / 2.0, @as(f32, @floatFromInt(winSize.height)) / 2.0);
@@ -98,7 +97,7 @@ pub fn init(allocator: std.mem.Allocator) !App {
 
     log.info("Initalization done", .{});
 
-    return App{ .window = window, .allocator = allocator, .ImGuiCtx = if (comptime builtin.mode == .Debug) imgGuiCtx else {} };
+    return App{ .window = window, .allocator = allocator, .ImGuiCtx = if (ImGui.enabled) imgGuiCtx else {} };
 }
 
 var deltaTime: f32 = 0;
@@ -121,16 +120,15 @@ pub fn loop(app: App) void {
         app.handleInput();
 
         Renderer.clear();
-        if (comptime builtin.mode == .Debug)
+        if (ImGui.enabled)
             ImGui.newFrame();
 
         sceneSelector.currentScene().draw(deltaTime);
 
-        if (comptime builtin.mode == .Debug)
+        if (ImGui.enabled) {
             imGuiDebugInfo(ImGui.c.igGetIO());
-
-        if (comptime builtin.mode == .Debug)
             ImGui.render();
+        }
 
         app.window.swapBuffers();
 
@@ -142,7 +140,7 @@ pub fn destroy(app: App) void {
     log.info("Destroying application", .{});
 
     sceneSelector.destroyScenes();
-    if (comptime builtin.mode == .Debug)
+    if (ImGui.enabled)
         app.ImGuiCtx.destroy();
     gl.makeProcTableCurrent(null);
     glfw.makeContextCurrent(null);
@@ -186,7 +184,7 @@ fn keyCallback(window: glfw.Window, key: glfw.Key, _: i32, action: glfw.Action, 
 var lastX: f32 = 0;
 var lastY: f32 = 0;
 fn mouseCallback(window: glfw.Window, xpos: f64, ypos: f64) void {
-    if (comptime builtin.mode == .Debug)
+    if (ImGui.enabled)
         ImGui.igGlfw.cImGui_ImplGlfw_CursorPosCallback(@ptrCast(window.handle), xpos, ypos);
 
     if (!cursorHidden) return;
@@ -214,7 +212,7 @@ fn handleSceneChange(app: App) void {
 }
 
 fn imGuiDebugInfo(io: *ImGui.c.ImGuiIO) void {
-    if (comptime builtin.mode == .Debug) {
+    if (ImGui.enabled) {
         ImGui.c.igSetNextWindowPos(.{ .x = io.*.DisplaySize.x - 200, .y = 5 }, ImGui.c.ImGuiCond_Always);
         ImGui.c.igSetNextWindowSize(.{ .x = 0, .y = 50 }, ImGui.c.ImGuiCond_Always);
         _ = ImGui.c.igBegin("Framerate", null, ImGui.c.ImGuiWindowFlags_NoDecoration | ImGui.c.ImGuiWindowFlags_NoBackground | ImGui.c.ImGuiWindowFlags_NoInputs);

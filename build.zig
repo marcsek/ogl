@@ -1,9 +1,12 @@
 const std = @import("std");
-const builtin = @import("builtin");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const enableImGui = b.option(bool, "imguiEnable", "Whether to include ImGui") orelse true;
+
+    const options = b.addOptions();
+    options.addOption(bool, "imgui", enableImGui);
 
     const exe = b.addExecutable(.{
         .name = "ogl",
@@ -12,7 +15,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    addDepsToExe(b, exe, target, optimize);
+    exe.root_module.addOptions("options", options);
+
+    addDepsToExe(b, exe, target, optimize, enableImGui);
 
     b.installArtifact(exe);
 
@@ -33,7 +38,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    addDepsToExe(b, exe_check, target, optimize);
+    addDepsToExe(b, exe_check, target, optimize, enableImGui);
 
     const check = b.step("check", "Check if compiles");
     check.dependOn(&exe_check.step);
@@ -44,7 +49,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    addDepsToExe(b, exe_unit_tests, target, optimize);
+    addDepsToExe(b, exe_unit_tests, target, optimize, enableImGui);
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 
@@ -52,7 +57,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_exe_unit_tests.step);
 }
 
-pub fn addDepsToExe(b: *std.Build, exe: *std.Build.Step.Compile, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
+pub fn addDepsToExe(b: *std.Build, exe: *std.Build.Step.Compile, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, imgui: bool) void {
     const glfw_dep = b.dependency("mach-glfw", .{
         .target = target,
         .optimize = optimize,
@@ -73,7 +78,8 @@ pub fn addDepsToExe(b: *std.Build, exe: *std.Build.Step.Compile, target: std.Bui
     exe.addObjectFile(b.path("vendor/cglm/build/libcglm.a"));
     exe.addIncludePath(b.path("vendor/cglm/include"));
 
-    if (comptime builtin.mode == .Debug) {
+    _ = imgui;
+    if (optimize == .Debug) {
         const IMGUI_SOURCES = [_][]const u8{
             "vendor/imgui_bindings/generated/dcimgui.cpp",
             "vendor/imgui_bindings/generated/dcimgui_impl_opengl3.cpp",
