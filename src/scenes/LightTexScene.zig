@@ -1,10 +1,6 @@
 const std = @import("std");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
-const vb = @import("../VertexBuffer.zig");
-const ib = @import("../IndexBuffer.zig");
-const va = @import("../VertexArray.zig");
-const vbl = @import("../VertexBufferLayout.zig");
 const Shader = @import("../Shader.zig");
 const Texture = @import("../Texture.zig");
 const Camera = @import("../Camera.zig");
@@ -12,17 +8,15 @@ const ImGui = @import("../imgui.zig");
 const Renderer = @import("../Renderer.zig");
 const glm = @import("../glm.zig");
 const cube = @import("../shapes.zig").cube;
+const Geometry = @import("../Geometry.zig");
 
 allocator: std.mem.Allocator,
 window: glfw.Window,
 camera: Camera,
 shaderDefault: Shader,
 shaderLight: Shader,
-vaoCube: va,
-vaoLight: va,
-vboCube: vb,
-vboLight: vb,
-ibo: ib,
+geometryCube: Geometry,
+geometryLight: Geometry,
 fov: f32 = 45,
 cubePos: glm.vec3,
 lightPos: glm.vec3,
@@ -39,39 +33,13 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 
     const winSize = win.getFramebufferSize();
 
-    var vaoCube = va.init();
-    errdefer va.destroy();
-
-    var vboCube = vb.init(&cube.verticesNormalsTex, 4 * 6 * 8 * @sizeOf(f32));
-    errdefer vboCube.destroy();
-
-    var vbloCube = vbl.init(alloc);
-    defer vbloCube.destroy();
-    vbloCube.push(3) catch unreachable;
-    vbloCube.push(3) catch unreachable;
-    vbloCube.push(2) catch unreachable;
-
-    vaoCube.addBuffer(vboCube, vbloCube);
-
-    var vaoLight = va.init();
-    errdefer va.destroy();
-
-    var vboLight = vb.init(&cube.vertices, 4 * 6 * 3 * @sizeOf(f32));
-    errdefer vboLight.destroy();
-
-    var vbloLight = vbl.init(alloc);
-    defer vbloLight.destroy();
-    vbloLight.push(3) catch unreachable;
-
-    vaoLight.addBuffer(vboLight, vbloLight);
-
-    var ibo = ib.init(&cube.indices, 6 * 6);
-    errdefer ibo.destroy();
+    const geometryCube = cube.createGeometry(alloc, .{ .texture = true, .normals = true }) catch unreachable;
+    const geometryLight = cube.createGeometry(alloc, .{}) catch unreachable;
 
     var shaderDefault = Shader.init("./res/shaders/defaultVert.glsl", "./res/shaders/defaultFrag.glsl") catch unreachable;
     errdefer shaderDefault.destroy();
 
-    var shaderLight = Shader.init("./res/shaders/lightTexVert.glsl", "./res/shaders/lightTexFrag.glsl") catch unreachable;
+    var shaderLight = Shader.init("./res/shaders/lightTexVert.glsl", "./res/shaders/lightTexSpotFrag.glsl") catch unreachable;
     errdefer shaderLight.destroy();
 
     shaderLight.bind();
@@ -84,9 +52,17 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     texture.bind(0);
     textureSpec.bind(1);
     textureEmis.bind(2);
+
     shaderLight.setUniform1i("material.diffuse", 0);
     shaderLight.setUniform1i("material.specular", 1);
     shaderLight.setUniform1i("material.emission", 2);
+
+    shaderLight.setUniform1f("light.constant", 1.0);
+    shaderLight.setUniform1f("light.linear", 0.09);
+    shaderLight.setUniform1f("light.quadratic", 0.032);
+
+    shaderLight.setUniform1f("light.cutOff", @cos(glm.glm_rad(12.5)));
+    shaderLight.setUniform1f("light.cutOffOuter", @cos(glm.glm_rad(17.5)));
 
     var camera = Camera.init(45, .{ 0, 0, 7 });
     camera.mouse.lastX = @as(f32, @floatFromInt(winSize.width)) / 2;
@@ -98,13 +74,10 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
         .shaderDefault = shaderDefault,
         .shaderLight = shaderLight,
         .camera = camera,
-        .vaoCube = vaoCube,
-        .vaoLight = vaoLight,
-        .vboCube = vboCube,
-        .vboLight = vboLight,
-        .ibo = ibo,
+        .geometryCube = geometryCube,
+        .geometryLight = geometryLight,
         .cubePos = .{ 0, 0, 0 },
-        .lightPos = .{ 0, 0, 0 },
+        .lightPos = .{ 1.2, 0.5, 1.0 },
         .lightColor = .{ 1.0, 1.0, 1.0 },
         .cubeColor = .{ 1.0, 0.5, 0.31 },
         .rotAngle = 0,
@@ -135,22 +108,22 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     var lightScale: glm.vec3 = .{ 0.3, 0.3, 0.3 };
     const lightR, const lightG, const lightB = scene.lightColor;
-    scene.vaoLight.bind();
+    scene.geometryLight.bind();
     scene.shaderDefault.bind();
     scene.shaderDefault.setUniformMat4f("view", scene.camera.getViewMatrix());
     scene.shaderDefault.setUniformMat4f("projection", projection);
-    scene.lightPos[0] = @sin(scene.rotAngle / 4) * 2;
-    scene.lightPos[1] = @cos(scene.rotAngle / 4) * 2;
-    scene.lightPos[2] = @sin(scene.rotAngle / 2) * 1;
+    //scene.lightPos[0] = @sin(scene.rotAngle / 4) * 2;
+    //scene.lightPos[1] = @cos(scene.rotAngle / 4) * 2;
+    //scene.lightPos[2] = @sin(scene.rotAngle / 2) * 1;
     glm.glmc_mat4_identity(&model);
     glm.glmc_translate(&model, &scene.lightPos);
     glm.glmc_scale(&model, &lightScale);
     //glm.glmc_rotate(&model, 0, &rotAxis);
     scene.shaderDefault.setUniformMat4f("model", model);
     scene.shaderDefault.setUniform3f("lightColor", lightR, lightG, lightB);
-    Renderer.draw(scene.vaoLight, scene.ibo, scene.shaderDefault);
+    Renderer.draw(scene.geometryLight.vertexArray, scene.geometryLight.indexBuffer, scene.shaderDefault);
 
-    scene.vaoCube.bind();
+    scene.geometryCube.bind();
     scene.shaderLight.bind();
     scene.shaderLight.setUniformMat4f("view", scene.camera.getViewMatrix());
     scene.shaderLight.setUniformMat4f("projection", projection);
@@ -158,19 +131,23 @@ pub fn draw(scene: *Self, dt: f32) void {
     glm.glmc_translate(&model, &scene.cubePos);
     glm.glmc_rotate(&model, 0 * glm.glm_rad(scene.rotAngle), &rotAxis);
     scene.shaderLight.setUniformMat4f("model", model);
-    Renderer.draw(scene.vaoCube, scene.ibo, scene.shaderLight);
 
-    //scene.shaderLight.setUniform3f("material.specular", 0.5, 0.5, 0.5);
     scene.shaderLight.setUniform1f("material.shininess", 64);
 
     var lightPosView: glm.vec3 = undefined;
     var viewMatrix: glm.mat4 = scene.camera.getViewMatrix();
-    glm.glmc_mat4_mulv3(&viewMatrix, &scene.lightPos, 1.0, &lightPosView);
+    glm.glmc_mat4_mulv3(&viewMatrix, &scene.camera.position, 1.0, &lightPosView);
+
+    var lightDirView: glm.vec3 = undefined;
+    glm.glmc_mat4_mulv3(&viewMatrix, &scene.camera.front, 0.0, &lightDirView);
+    glm.glmc_vec3_normalize(&lightDirView);
 
     scene.shaderLight.setUniform3f("light.position", lightPosView[0], lightPosView[1], lightPosView[2]);
-    scene.shaderLight.setUniform3f("light.ambient", lightR * 0.2, lightG * 0.2, lightB * 0.2);
+    scene.shaderLight.setUniform3f("light.direction", lightDirView[0], lightDirView[1], lightDirView[2]);
+    scene.shaderLight.setUniform3f("light.ambient", lightR * 0.1, lightG * 0.1, lightB * 0.1);
     scene.shaderLight.setUniform3f("light.diffuse", lightR * 0.5, lightG * 0.5, lightB * 0.5);
     scene.shaderLight.setUniform3f("light.specular", lightR, lightG, lightB);
+    Renderer.draw(scene.geometryCube.vertexArray, scene.geometryCube.indexBuffer, scene.shaderLight);
 
     scene.rotAngle += 3 * dt;
 
@@ -184,13 +161,8 @@ pub fn draw(scene: *Self, dt: f32) void {
 }
 
 pub fn destroy(scene: *Self) void {
-    scene.textureSpec.destroy();
-    scene.texture.destroy();
-    scene.vboCube.destroy();
-    scene.vboLight.destroy();
-    scene.vaoCube.destroy();
-    scene.vaoLight.destroy();
-    scene.ibo.destroy();
+    scene.geometryCube.destroy();
+    scene.geometryLight.destroy();
     scene.shaderDefault.destroy();
     scene.shaderLight.destroy();
 }

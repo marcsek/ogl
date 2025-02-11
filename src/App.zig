@@ -8,6 +8,7 @@ const utils = @import("utils.zig");
 const log = std.log;
 const openGlLog = utils.scopes.openGlLog;
 const glfwLog = utils.scopes.glfwLog;
+const daco = @import("assimp.zig");
 
 var gl_procs: gl.ProcTable = undefined;
 
@@ -22,6 +23,7 @@ var sceneSelector: Scene.SceneSelector = undefined;
 
 pub fn init(allocator: std.mem.Allocator) !App {
     log.info("Initializing application", .{});
+    daco.load();
 
     glfw.setErrorCallback(utils.glfwErrorCallback);
 

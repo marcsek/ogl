@@ -1,3 +1,4 @@
+const std = @import("std");
 const gl = @import("gl");
 const VertexBuffer = @import("VertexBuffer.zig");
 const VertexBufferLayout = @import("VertexBufferLayout.zig");
@@ -16,7 +17,7 @@ pub fn init() Self {
     return va;
 }
 
-pub fn addBuffer(va: Self, vb: VertexBuffer, vbl: VertexBufferLayout) void {
+pub fn addBuffers(va: Self, vb: VertexBuffer, vbl: VertexBufferLayout) void {
     va.bind();
     vb.bind();
 
@@ -26,6 +27,15 @@ pub fn addBuffer(va: Self, vb: VertexBuffer, vbl: VertexBufferLayout) void {
         gl.VertexAttribPointer(@intCast(i), @intCast(element.count), element.vType, element.normalized, @intCast(vbl.stride), offset);
         offset += element.count * VertexBufferElement.getSizeOfType(gl.FLOAT);
     }
+}
+
+pub fn addBuffer(va: Self, index: u32, buffer: VertexBuffer, element: VertexBufferElement) void {
+    va.bind();
+
+    buffer.bind();
+    const stride: u32 = element.count * VertexBufferElement.getSizeOfType(gl.FLOAT);
+    gl.EnableVertexAttribArray(@intCast(index));
+    gl.VertexAttribPointer(@intCast(index), @intCast(element.count), element.vType, element.normalized, @intCast(stride), 0);
 }
 
 pub fn bind(va: Self) void {

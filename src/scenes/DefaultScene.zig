@@ -1,10 +1,6 @@
 const std = @import("std");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
-const vb = @import("../VertexBuffer.zig");
-const ib = @import("../IndexBuffer.zig");
-const va = @import("../VertexArray.zig");
-const vbl = @import("../VertexBufferLayout.zig");
 const Shader = @import("../Shader.zig");
 const Texture = @import("../Texture.zig");
 const Camera = @import("../Camera.zig");
@@ -12,16 +8,14 @@ const ImGui = @import("../imgui.zig");
 const Renderer = @import("../Renderer.zig");
 const glm = @import("../glm.zig");
 const cube = @import("../shapes.zig").cube;
+const Geometry = @import("../Geometry.zig");
 
 allocator: std.mem.Allocator,
 window: glfw.Window,
 camera: Camera,
 shader: Shader,
 poses: [6]glm.vec3,
-vao: va,
-ibo: ib,
-vblo: vbl,
-vbo: vb,
+geometry: Geometry,
 texture: Texture,
 fov: f32 = 45,
 rotAngle: f32 = 0.0,
@@ -33,22 +27,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 
     const winSize = win.getFramebufferSize();
 
-    var vao = va.init();
-    errdefer va.destroy();
-
-    var vbo = vb.init(&cube.verticesTexCoords, 4 * 6 * 5 * @sizeOf(f32));
-    errdefer vbo.destroy();
-
-    var vblo = vbl.init(alloc);
-    errdefer vblo.destroy();
-
-    vblo.push(3) catch unreachable;
-    vblo.push(2) catch unreachable;
-
-    vao.addBuffer(vbo, vblo);
-
-    var ibo = ib.init(&cube.indices, 6 * 6);
-    errdefer ibo.destroy();
+    const geometry = cube.createGeometry(alloc, .{ .texture = true }) catch unreachable;
 
     var shader = Shader.init("./res/shaders/texVert.glsl", "./res/shaders/texFrag.glsl") catch unreachable;
     errdefer shader.destroy();
@@ -78,10 +57,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
         .window = win,
         .shader = shader,
         .camera = camera,
-        .vao = vao,
-        .ibo = ibo,
-        .vblo = vblo,
-        .vbo = vbo,
+        .geometry = geometry,
         .texture = texture,
         .poses = poses,
     };
@@ -91,7 +67,7 @@ pub fn draw(scene: *Self, dt: f32) void {
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
 
     scene.texture.bind(0);
-    scene.vao.bind();
+    scene.geometry.bind();
     var winSize = scene.window.getFramebufferSize();
     scene.camera.updateViewMatrix();
 
@@ -113,7 +89,7 @@ pub fn draw(scene: *Self, dt: f32) void {
         glm.glmc_rotate(&model, scene.rotAngle - @as(f32, @floatFromInt(i * 3)), &rotAxis);
         scene.shader.setUniformMat4f("model", model);
 
-        Renderer.draw(scene.vao, scene.ibo, scene.shader);
+        Renderer.draw(scene.geometry.vertexArray, scene.geometry.indexBuffer, scene.shader);
     }
 
     scene.rotAngle += 3 * dt;
@@ -125,10 +101,7 @@ pub fn draw(scene: *Self, dt: f32) void {
 }
 
 pub fn destroy(scene: *Self) void {
-    scene.vao.destroy();
-    scene.ibo.destroy();
-    scene.vblo.destroy();
-    scene.vbo.destroy();
+    scene.geometry.destroy();
     scene.texture.destroy();
     scene.shader.destroy();
 }

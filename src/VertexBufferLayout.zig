@@ -14,6 +14,14 @@ pub const VertexBufferElement = struct {
     count: u32,
     normalized: gl.boolean,
 
+    pub fn init(count: u32) VertexBufferElement {
+        return VertexBufferElement{
+            .vType = gl.FLOAT,
+            .count = count,
+            .normalized = gl.FALSE,
+        };
+    }
+
     pub fn getSizeOfType(vType: c_uint) u32 {
         return switch (vType) {
             gl.FLOAT => 4,
@@ -30,7 +38,7 @@ pub fn init(alloc: std.mem.Allocator) Self {
     };
 }
 
-pub fn push(vbl: *Self, count: u32) !void {
+pub fn push(vbl: *Self, count: u32) std.mem.Allocator.Error!void {
     try vbl.elements.append(.{ .count = count, .normalized = gl.FALSE, .vType = gl.FLOAT });
 
     vbl.stride += count * VertexBufferElement.getSizeOfType(gl.FLOAT);

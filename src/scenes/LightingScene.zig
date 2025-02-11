@@ -48,7 +48,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     vbloCube.push(3) catch unreachable;
     vbloCube.push(3) catch unreachable;
 
-    vaoCube.addBuffer(vboCube, vbloCube);
+    vaoCube.addBuffers(vboCube, vbloCube);
 
     var vaoLight = va.init();
     errdefer va.destroy();
@@ -60,7 +60,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     defer vbloLight.destroy();
     vbloLight.push(3) catch unreachable;
 
-    vaoLight.addBuffer(vboLight, vbloLight);
+    vaoLight.addBuffers(vboLight, vbloLight);
 
     var ibo = ib.init(&cube.indices, 6 * 6);
     errdefer ibo.destroy();
