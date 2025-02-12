@@ -2,7 +2,7 @@ const std = @import("std");
 const gl = @import("gl");
 const IndexBuffer = @import("IndexBuffer.zig");
 const VertexArray = @import("VertexArray.zig");
-const Shader = @import("Shader.zig");
+const Shader = @import("ShaderProgram.zig");
 
 pub fn draw(va: VertexArray, ib: IndexBuffer, sh: Shader) void {
     va.bind();

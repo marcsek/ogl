@@ -75,7 +75,7 @@ pub const SceneSelector = struct {
     const Self = @This();
 
     scenes: []Scene,
-    sceneIdx: u32 = 2,
+    sceneIdx: u32 = 0,
 
     pub fn init(inScenes: []Scene) Self {
         return Self{ .scenes = inScenes };

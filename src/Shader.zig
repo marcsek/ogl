@@ -4,86 +4,26 @@ const glm = @import("glm.zig");
 const alloc = std.heap.c_allocator;
 const log = std.log;
 
-const MyHashMap = std.StringHashMap(c_int);
-
 const Self = @This();
 
-rendererID: c_uint = undefined,
-uniformCache: MyHashMap,
+rendererID: c_uint,
 
-pub fn init(vertexPath: []const u8, fragmentPath: []const u8) !Self {
-    const vertexSource = try loadFile(alloc, vertexPath);
-    defer alloc.free(vertexSource);
-    const fragmentSource = try loadFile(alloc, fragmentPath);
-    defer alloc.free(fragmentSource);
+pub const ShaderKind = enum {
+    vertex,
+    fragment,
+};
 
-    const shader = try createShader(vertexSource, fragmentSource);
+pub fn init(shaderPath: []const u8, kind: ShaderKind) !Self {
+    const source = try loadFile(alloc, shaderPath);
+    defer alloc.free(source);
 
-    return Self{ .rendererID = shader, .uniformCache = MyHashMap.init(alloc) };
-}
+    const shader = try compileShader(getGlShaderEnumFromKind(kind), source);
 
-pub fn setUniform1i(shader: *Self, name: [:0]const u8, value: i32) void {
-    gl.Uniform1i(shader.getUniformLocation(name), value);
-}
-
-pub fn setUniform1f(shader: *Self, name: [:0]const u8, value: f32) void {
-    gl.Uniform1f(shader.getUniformLocation(name), value);
-}
-
-pub fn setUniform3f(shader: *Self, name: [:0]const u8, v0: f32, v1: f32, v2: f32) void {
-    gl.Uniform3f(shader.getUniformLocation(name), v0, v1, v2);
-}
-
-pub fn setUniform4f(shader: *Self, name: [:0]const u8, v0: f32, v1: f32, v2: f32, v3: f32) void {
-    gl.Uniform4f(shader.getUniformLocation(name), v0, v1, v2, v3);
-}
-
-pub fn setUniformMat4f(shader: *Self, name: [:0]const u8, matrix: glm.mat4) void {
-    gl.UniformMatrix4fv(shader.getUniformLocation(name), 1, gl.FALSE, &matrix[0][0]);
-}
-
-pub fn bind(shader: Self) void {
-    gl.UseProgram(shader.rendererID);
-}
-
-pub fn unbind(_: Self) void {
-    gl.UseProgram(0);
+    return Self{ .rendererID = shader };
 }
 
 pub fn destroy(shader: *Self) void {
-    gl.DeleteProgram(shader.rendererID);
-    shader.uniformCache.deinit();
-}
-
-fn getUniformLocation(shader: *Self, name: [:0]const u8) c_int {
-    if (shader.uniformCache.get(name)) |value| {
-        return value;
-    }
-
-    const location = gl.GetUniformLocation(shader.rendererID, name.ptr);
-
-    if (location == -1)
-        log.warn("Uniform '{s}' doesn't exist", .{name});
-
-    shader.uniformCache.put(name, location) catch unreachable;
-
-    return location;
-}
-
-fn createShader(vertexShader: [:0]const u8, fragmentShader: [:0]const u8) !c_uint {
-    const program = gl.CreateProgram();
-    const vs = try compileShader(gl.VERTEX_SHADER, vertexShader);
-    const fs = try compileShader(gl.FRAGMENT_SHADER, fragmentShader);
-    defer gl.DeleteShader(vs);
-    defer gl.DeleteShader(fs);
-
-    gl.AttachShader(program, vs);
-    gl.AttachShader(program, fs);
-
-    gl.LinkProgram(program);
-    gl.ValidateProgram(program);
-
-    return program;
+    gl.DeleteShader(shader.rendererID);
 }
 
 fn compileShader(shaderType: c_uint, source: [:0]const u8) !c_uint {
@@ -129,4 +69,11 @@ fn loadFile(allocator: std.mem.Allocator, filepath: []const u8) ![:0]u8 {
     defer allocator.free(contents);
 
     return null_term_contents;
+}
+
+inline fn getGlShaderEnumFromKind(kind: ShaderKind) c_uint {
+    return switch (kind) {
+        .vertex => gl.VERTEX_SHADER,
+        .fragment => gl.FRAGMENT_SHADER,
+    };
 }

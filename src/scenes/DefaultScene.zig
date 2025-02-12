@@ -3,21 +3,21 @@ const builtin = @import("builtin");
 const glfw = @import("mach-glfw");
 const gl = @import("gl");
 const ImGui = @import("../imgui.zig");
-const Shader = @import("../Shader.zig");
 const Texture = @import("../Texture.zig");
 const Camera = @import("../Camera.zig");
+const Geometry = @import("../Geometry.zig");
+const Material = @import("../Material.zig");
+const Shader = @import("../Shader.zig");
 const Renderer = @import("../Renderer.zig");
 const glm = @import("../glm.zig");
 const cube = @import("../shapes.zig").cube;
-const Geometry = @import("../Geometry.zig");
 
 allocator: std.mem.Allocator,
 window: glfw.Window,
 camera: Camera,
-shader: Shader,
 poses: [6]glm.vec3,
 geometry: Geometry,
-texture: Texture,
+material: Material,
 fov: f32 = 45,
 rotAngle: f32 = 0.0,
 
@@ -30,14 +30,21 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 
     const geometry = cube.createGeometry(alloc, .{ .texture = true }) catch unreachable;
 
-    var shader = Shader.init("./res/shaders/texVert.glsl", "./res/shaders/texFrag.glsl") catch unreachable;
-    errdefer shader.destroy();
-    shader.bind();
+    var vertexShader = Shader.init("./res/shaders/texVert.glsl", .vertex) catch unreachable;
+    errdefer vertexShader.destroy();
 
-    var texture = Texture.init(alloc, "./res/textures/sauron_eye.png") catch unreachable;
+    var fragmentShader = Shader.init("./res/shaders/newTexFrag.glsl", .fragment) catch unreachable;
+    errdefer fragmentShader.destroy();
+
+    var material = Material.init(&vertexShader, &fragmentShader);
+
+    const texture = Texture.init(alloc, "./res/textures/sauron_eye.png") catch unreachable;
     errdefer texture.destroy();
-    texture.bind(0);
-    shader.setUniform1i("u_Texture", 0);
+
+    material.setTexture(texture, .color);
+
+    //TODO: ????
+    //errdefer material.destroy();
 
     const rand = std.crypto.random;
     var poses: [6]glm.vec3 = undefined;
@@ -56,10 +63,9 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     return Self{
         .allocator = alloc,
         .window = win,
-        .shader = shader,
         .camera = camera,
         .geometry = geometry,
-        .texture = texture,
+        .material = material,
         .poses = poses,
     };
 }
@@ -67,7 +73,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 pub fn draw(scene: *Self, dt: f32) void {
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
 
-    scene.texture.bind(0);
+    scene.material.bind();
     scene.geometry.bind();
     var winSize = scene.window.getFramebufferSize();
     scene.camera.updateViewMatrix();
@@ -80,17 +86,16 @@ pub fn draw(scene: *Self, dt: f32) void {
     const aspect: f32 = @as(f32, @floatFromInt(winSize.width)) / @as(f32, @floatFromInt(winSize.height));
     glm.glmc_perspective(glm.glm_rad(scene.fov), aspect, 0.1, 100, &projection);
 
-    scene.shader.bind();
-    scene.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
-    scene.shader.setUniformMat4f("projection", projection);
+    scene.material.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
+    scene.material.shader.setUniformMat4f("projection", projection);
 
     for (0..5) |i| {
         glm.glmc_mat4_identity(&model);
         glm.glmc_translate(&model, &scene.poses[i]);
         glm.glmc_rotate(&model, scene.rotAngle - @as(f32, @floatFromInt(i * 3)), &rotAxis);
-        scene.shader.setUniformMat4f("model", model);
+        scene.material.shader.setUniformMat4f("model", model);
 
-        Renderer.draw(scene.geometry.vertexArray, scene.geometry.indexBuffer, scene.shader);
+        Renderer.draw(scene.geometry.vertexArray, scene.geometry.indexBuffer, scene.material.shader);
     }
 
     scene.rotAngle += 3 * dt;
@@ -98,15 +103,12 @@ pub fn draw(scene: *Self, dt: f32) void {
     if (ImGui.enabled)
         scene.camera.imGuiDebugWindow();
 
-    scene.texture.unbind();
-
     winSize = scene.window.getFramebufferSize();
 }
 
 pub fn destroy(scene: *Self) void {
     scene.geometry.destroy();
-    scene.texture.destroy();
-    scene.shader.destroy();
+    scene.material.destroy();
 }
 
 pub fn onSceneReentry(scene: *Self) void {

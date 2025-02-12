@@ -8,8 +8,6 @@ in vec2 v_TexCoords;
 in vec3 v_CamDir;
 
 struct Material {
-    //vec3 ambient;
-    //vec3 diffuse;
     sampler2D diffuse;
     sampler2D specular;
     sampler2D emission;

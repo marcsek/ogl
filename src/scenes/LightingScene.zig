@@ -5,10 +5,12 @@ const vb = @import("../VertexBuffer.zig");
 const ib = @import("../IndexBuffer.zig");
 const va = @import("../VertexArray.zig");
 const vbl = @import("../VertexBufferLayout.zig");
-const Shader = @import("../Shader.zig");
 const Texture = @import("../Texture.zig");
 const Camera = @import("../Camera.zig");
 const ImGui = @import("../imgui.zig");
+const Geometry = @import("../Geometry.zig");
+const Shader = @import("../Shader.zig");
+const Material = @import("../Material.zig");
 const Renderer = @import("../Renderer.zig");
 const glm = @import("../glm.zig");
 const cube = @import("../shapes.zig").cube;
@@ -16,13 +18,10 @@ const cube = @import("../shapes.zig").cube;
 allocator: std.mem.Allocator,
 window: glfw.Window,
 camera: Camera,
-shaderDefault: Shader,
-shaderLight: Shader,
-vaoCube: va,
-vaoLight: va,
-vboCube: vb,
-vboLight: vb,
-ibo: ib,
+geometryCube: Geometry,
+geometryLight: Geometry,
+materialCube: Material,
+materialLight: Material,
 fov: f32 = 45,
 cubePos: glm.vec3,
 lightPos: glm.vec3,
@@ -37,39 +36,21 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 
     const winSize = win.getFramebufferSize();
 
-    var vaoCube = va.init();
-    errdefer va.destroy();
+    const geometryCube = cube.createGeometry(alloc, .{ .normals = true }) catch unreachable;
+    const geometryLight = cube.createGeometry(alloc, .{}) catch unreachable;
 
-    var vboCube = vb.init(&cube.verticesNormals, 4 * 6 * 6 * @sizeOf(f32));
-    errdefer vboCube.destroy();
+    var vertexDefault = Shader.init("./res/shaders/defaultVert.glsl", .vertex) catch unreachable;
+    errdefer vertexDefault.destroy();
+    var fragmentDefault = Shader.init("./res/shaders/defaultFrag.glsl", .fragment) catch unreachable;
+    errdefer fragmentDefault.destroy();
 
-    var vbloCube = vbl.init(alloc);
-    defer vbloCube.destroy();
-    vbloCube.push(3) catch unreachable;
-    vbloCube.push(3) catch unreachable;
+    var vertexLight = Shader.init("./res/shaders/lightVert.glsl", .vertex) catch unreachable;
+    errdefer vertexLight.destroy();
+    var fragmentLight = Shader.init("./res/shaders/lightFrag.glsl", .fragment) catch unreachable;
+    errdefer fragmentLight.destroy();
 
-    vaoCube.addBuffers(vboCube, vbloCube);
-
-    var vaoLight = va.init();
-    errdefer va.destroy();
-
-    var vboLight = vb.init(&cube.vertices, 4 * 6 * 3 * @sizeOf(f32));
-    errdefer vboLight.destroy();
-
-    var vbloLight = vbl.init(alloc);
-    defer vbloLight.destroy();
-    vbloLight.push(3) catch unreachable;
-
-    vaoLight.addBuffers(vboLight, vbloLight);
-
-    var ibo = ib.init(&cube.indices, 6 * 6);
-    errdefer ibo.destroy();
-
-    var shaderDefault = Shader.init("./res/shaders/defaultVert.glsl", "./res/shaders/defaultFrag.glsl") catch unreachable;
-    errdefer shaderDefault.destroy();
-
-    var shaderLight = Shader.init("./res/shaders/lightVert.glsl", "./res/shaders/lightFrag.glsl") catch unreachable;
-    errdefer shaderLight.destroy();
+    const materialLight = Material.init(&vertexDefault, &fragmentDefault);
+    const materialCube = Material.init(&vertexLight, &fragmentLight);
 
     var camera = Camera.init(45, .{ 0, 0, 7 });
     camera.mouse.lastX = @as(f32, @floatFromInt(winSize.width)) / 2;
@@ -78,14 +59,11 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     return Self{
         .allocator = alloc,
         .window = win,
-        .shaderDefault = shaderDefault,
-        .shaderLight = shaderLight,
+        .geometryCube = geometryCube,
+        .geometryLight = geometryLight,
+        .materialCube = materialCube,
+        .materialLight = materialLight,
         .camera = camera,
-        .vaoCube = vaoCube,
-        .vaoLight = vaoLight,
-        .vboCube = vboCube,
-        .vboLight = vboLight,
-        .ibo = ibo,
         .cubePos = .{ 0, 0, 0 },
         .lightPos = .{ 0, 0, 0 },
         .lightColor = .{ 1.0, 1.0, 1.0 },
@@ -111,10 +89,11 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     var lightScale: glm.vec3 = .{ 0.3, 0.3, 0.3 };
     const lightR, const lightG, const lightB = scene.lightColor;
-    scene.vaoLight.bind();
-    scene.shaderDefault.bind();
-    scene.shaderDefault.setUniformMat4f("view", scene.camera.getViewMatrix());
-    scene.shaderDefault.setUniformMat4f("projection", projection);
+
+    scene.geometryLight.bind();
+    scene.materialLight.bind();
+    scene.materialLight.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
+    scene.materialLight.shader.setUniformMat4f("projection", projection);
     scene.lightPos[0] = @sin(scene.rotAngle / 4) * 2;
     scene.lightPos[1] = @cos(scene.rotAngle / 4) * 2;
     scene.lightPos[2] = @sin(scene.rotAngle / 2) * 1;
@@ -122,34 +101,35 @@ pub fn draw(scene: *Self, dt: f32) void {
     glm.glmc_translate(&model, &scene.lightPos);
     glm.glmc_scale(&model, &lightScale);
     //glm.glmc_rotate(&model, 0, &rotAxis);
-    scene.shaderDefault.setUniformMat4f("model", model);
-    scene.shaderDefault.setUniform3f("lightColor", lightR, lightG, lightB);
-    Renderer.draw(scene.vaoLight, scene.ibo, scene.shaderDefault);
+    scene.materialLight.shader.setUniformMat4f("model", model);
+    scene.materialLight.shader.setUniform3f("lightColor", lightR, lightG, lightB);
+    Renderer.draw(scene.geometryLight.vertexArray, scene.geometryLight.indexBuffer, scene.materialLight.shader);
 
-    scene.vaoCube.bind();
-    scene.shaderLight.bind();
-    scene.shaderLight.setUniformMat4f("view", scene.camera.getViewMatrix());
-    scene.shaderLight.setUniformMat4f("projection", projection);
+    scene.geometryCube.bind();
+    scene.materialCube.bind();
+    scene.materialCube.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
+    scene.materialCube.shader.setUniformMat4f("projection", projection);
     glm.glmc_mat4_identity(&model);
     glm.glmc_translate(&model, &scene.cubePos);
     glm.glmc_rotate(&model, 0 * glm.glm_rad(scene.rotAngle), &rotAxis);
-    scene.shaderLight.setUniformMat4f("model", model);
-    Renderer.draw(scene.vaoCube, scene.ibo, scene.shaderLight);
+    scene.materialCube.shader.setUniformMat4f("model", model);
 
     const objectR, const objectG, const objectB = scene.cubeColor;
-    scene.shaderLight.setUniform3f("material.ambient", objectR, objectG, objectB);
-    scene.shaderLight.setUniform3f("material.diffuse", objectR, objectG, objectB);
-    scene.shaderLight.setUniform3f("material.specular", 0.5, 0.5, 0.5);
-    scene.shaderLight.setUniform1f("material.shininess", 32);
+    scene.materialCube.shader.setUniform3f("material.ambient", objectR, objectG, objectB);
+    scene.materialCube.shader.setUniform3f("material.diffuse", objectR, objectG, objectB);
+    scene.materialCube.shader.setUniform3f("material.specular", 0.5, 0.5, 0.5);
+    scene.materialCube.shader.setUniform1f("material.shininess", 32);
 
     var lightPosView: glm.vec3 = undefined;
     var viewMatrix: glm.mat4 = scene.camera.getViewMatrix();
     glm.glmc_mat4_mulv3(&viewMatrix, &scene.lightPos, 1.0, &lightPosView);
 
-    scene.shaderLight.setUniform3f("light.position", lightPosView[0], lightPosView[1], lightPosView[2]);
-    scene.shaderLight.setUniform3f("light.ambient", lightR * 0.2, lightG * 0.2, lightB * 0.2);
-    scene.shaderLight.setUniform3f("light.diffuse", lightR * 0.5, lightG * 0.5, lightB * 0.5);
-    scene.shaderLight.setUniform3f("light.specular", lightR, lightG, lightB);
+    scene.materialCube.shader.setUniform3f("light.position", lightPosView[0], lightPosView[1], lightPosView[2]);
+    scene.materialCube.shader.setUniform3f("light.ambient", lightR * 0.2, lightG * 0.2, lightB * 0.2);
+    scene.materialCube.shader.setUniform3f("light.diffuse", lightR * 0.5, lightG * 0.5, lightB * 0.5);
+    scene.materialCube.shader.setUniform3f("light.specular", lightR, lightG, lightB);
+
+    Renderer.draw(scene.geometryCube.vertexArray, scene.geometryLight.indexBuffer, scene.materialCube.shader);
 
     scene.rotAngle += 3 * dt;
 
@@ -165,13 +145,10 @@ pub fn draw(scene: *Self, dt: f32) void {
 }
 
 pub fn destroy(scene: *Self) void {
-    scene.vboCube.destroy();
-    scene.vboLight.destroy();
-    scene.vaoCube.destroy();
-    scene.vaoLight.destroy();
-    scene.ibo.destroy();
-    scene.shaderDefault.destroy();
-    scene.shaderLight.destroy();
+    scene.geometryCube.destroy();
+    scene.geometryLight.destroy();
+    scene.materialCube.destroy();
+    scene.materialLight.destroy();
 }
 
 pub fn onSceneReentry(scene: *Self) void {

@@ -7,8 +7,6 @@ in vec3 v_FragPos;
 in vec2 v_TexCoords;
 
 struct Material {
-    //vec3 ambient;
-    //vec3 diffuse;
     sampler2D diffuse;
     sampler2D specular;
     sampler2D emission;
