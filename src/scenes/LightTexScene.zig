@@ -21,7 +21,6 @@ materialLight: Material,
 fov: f32 = 45,
 cubePos: glm.vec3,
 lightPos: glm.vec3,
-lightColor: glm.vec3,
 cubeColor: glm.vec3,
 rotAngle: f32,
 
@@ -36,17 +35,17 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     const geometryLight = cube.createGeometry(alloc, .{}) catch unreachable;
 
     var vertexDefault = Shader.init("./res/shaders/defaultVert.glsl", .vertex) catch unreachable;
-    errdefer vertexDefault.destroy();
+    defer vertexDefault.destroy();
     var fragmentDefault = Shader.init("./res/shaders/defaultFrag.glsl", .fragment) catch unreachable;
-    errdefer fragmentDefault.destroy();
+    defer fragmentDefault.destroy();
 
     var vertexLight = Shader.init("./res/shaders/lightTexVert.glsl", .vertex) catch unreachable;
-    errdefer vertexLight.destroy();
+    defer vertexLight.destroy();
     var fragmentLight = Shader.init("./res/shaders/lightTexSpotFrag.glsl", .fragment) catch unreachable;
-    errdefer fragmentLight.destroy();
+    defer fragmentLight.destroy();
 
-    const materialLight = Material.init(&vertexDefault, &fragmentDefault);
-    var materialCube = Material.init(&vertexLight, &fragmentLight);
+    const materialLight = Material.init(vertexDefault, fragmentDefault);
+    var materialCube = Material.init(vertexLight, fragmentLight);
 
     const texture = Texture.init(alloc, "./res/textures/container.png") catch unreachable;
     errdefer texture.destroy();
@@ -80,7 +79,6 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
         .materialLight = materialLight,
         .cubePos = .{ 0, 0, 0 },
         .lightPos = .{ 1.2, 0.5, 1.0 },
-        .lightColor = .{ 1.0, 1.0, 1.0 },
         .cubeColor = .{ 1.0, 0.5, 0.31 },
         .rotAngle = 0,
     };
@@ -107,7 +105,7 @@ pub fn draw(scene: *Self, dt: f32) void {
     //scene.textureSpec.bind(1);
 
     var lightScale: glm.vec3 = .{ 0.3, 0.3, 0.3 };
-    const lightR, const lightG, const lightB = scene.lightColor;
+    const lightR, const lightG, const lightB, _ = scene.materialLight.color;
     scene.geometryLight.bind();
     scene.materialLight.bind();
     scene.materialLight.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
@@ -120,7 +118,7 @@ pub fn draw(scene: *Self, dt: f32) void {
     glm.glmc_scale(&model, &lightScale);
     //glm.glmc_rotate(&model, 0, &rotAxis);
     scene.materialLight.shader.setUniformMat4f("model", model);
-    scene.materialLight.shader.setUniform3f("lightColor", lightR, lightG, lightB);
+    //scene.materialLight.shader.setUniform3f("lightColor", lightR, lightG, lightB);
     Renderer.draw(scene.geometryLight.vertexArray, scene.geometryLight.indexBuffer, scene.materialLight.shader);
 
     scene.geometryCube.bind();
@@ -153,7 +151,7 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     if (ImGui.enabled) {
         _ = ImGui.c.igBegin("Scene controls", null, 0);
-        _ = ImGui.c.igColorEdit3("Light color", &scene.lightColor, 0);
+        _ = ImGui.c.igColorEdit3("Light color", &scene.materialLight.color, 0);
         _ = ImGui.c.igSliderFloat3("Light position", &scene.lightPos, -10, 10);
         ImGui.c.igEnd();
     }

@@ -20,12 +20,24 @@ pub fn init(alloc: Allocator) Self {
     return Self{ .allocator = alloc };
 }
 
+// TODO: Free beforehand ?
 pub fn setVertexData(self: *Self, vertexDataIn: []const BufferAttribute) Allocator.Error!void {
     self.buffers = try self.allocator.alloc(VertexBuffer, vertexDataIn.len);
     errdefer self.allocator.free(self.buffers);
 
-    self.vertexData = try self.allocator.dupe(BufferAttribute, vertexDataIn);
-    errdefer self.allocator.free(self.vertexData);
+    self.vertexData = try self.allocator.alloc(BufferAttribute, vertexDataIn.len);
+    errdefer self.allocator.free(vertexDataIn);
+    for (vertexDataIn, 0..vertexDataIn.len) |bufAtrib, i|
+        self.vertexData[i] = try bufAtrib.copy(self.allocator);
+
+    self.bindData();
+}
+
+pub fn setVertexDataFromOwned(self: *Self, vertexDataIn: []BufferAttribute) Allocator.Error!void {
+    self.buffers = try self.allocator.alloc(VertexBuffer, vertexDataIn.len);
+    errdefer self.allocator.free(self.buffers);
+
+    self.vertexData = vertexDataIn;
 
     self.bindData();
 }
@@ -48,9 +60,13 @@ pub fn bindData(self: *Self) void {
 }
 
 pub fn setIndex(self: *Self, indices: []const u32) Allocator.Error!void {
+    self.setIndexFromOwned(try self.allocator.dupe(u32, indices));
+}
+
+pub fn setIndexFromOwned(self: *Self, indices: []u32) void {
     const indexBuffer = IndexBuffer.init(indices.ptr, @intCast(indices.len));
 
-    self.index = try self.allocator.dupe(u32, indices);
+    self.index = indices;
     self.indexBuffer = indexBuffer;
 }
 
@@ -80,4 +96,12 @@ pub const BufferAttribute = struct {
     name: []const u8,
     data: []const f32,
     itemSize: u32,
+
+    pub fn copy(self: BufferAttribute, allocator: Allocator) Allocator.Error!BufferAttribute {
+        return BufferAttribute{
+            .name = try allocator.dupe(u8, self.name),
+            .data = try allocator.dupe(f32, self.data),
+            .itemSize = self.itemSize,
+        };
+    }
 };

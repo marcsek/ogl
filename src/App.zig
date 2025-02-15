@@ -18,12 +18,11 @@ window: glfw.Window,
 allocator: std.mem.Allocator,
 ImGuiCtx: if (ImGui.enabled) ImGui else void,
 
-var scenes: [3]Scene.Scene = undefined;
+var scenes: [4]Scene.Scene = undefined;
 var sceneSelector: Scene.SceneSelector = undefined;
 
 pub fn init(allocator: std.mem.Allocator) !App {
     log.info("Initializing application", .{});
-    daco.load();
 
     glfw.setErrorCallback(utils.glfwErrorCallback);
 
@@ -89,9 +88,13 @@ pub fn init(allocator: std.mem.Allocator) !App {
     log.info("Initializing scene: Lighting Texture Scene", .{});
     const lightingTexScene = Scene.LightingTexScene.init(allocator, window);
 
+    log.info("Initializing scene: Model Scene", .{});
+    const modelScene = Scene.ModelScene.init(allocator, window);
+
     scenes[0] = .{ .defaultScene = defaultScene };
     scenes[1] = .{ .lightingScene = lightingScene };
     scenes[2] = .{ .lightingTexScene = lightingTexScene };
+    scenes[3] = .{ .modelScene = modelScene };
 
     sceneSelector = Scene.SceneSelector.init(&scenes);
 
@@ -105,7 +108,6 @@ var lastFrame: f32 = 0;
 var lastSceneIdx: u32 = 2;
 
 pub fn loop(app: App) void {
-
     //gl.PolygonMode(gl.FRONT_AND_BACK, gl.LINE);
     while (!app.window.shouldClose()) {
         const currentFrame: f32 = @floatCast(glfw.getTime());

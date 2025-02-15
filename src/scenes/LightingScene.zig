@@ -25,7 +25,6 @@ materialLight: Material,
 fov: f32 = 45,
 cubePos: glm.vec3,
 lightPos: glm.vec3,
-lightColor: glm.vec3,
 cubeColor: glm.vec3,
 rotAngle: f32,
 
@@ -40,17 +39,17 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     const geometryLight = cube.createGeometry(alloc, .{}) catch unreachable;
 
     var vertexDefault = Shader.init("./res/shaders/defaultVert.glsl", .vertex) catch unreachable;
-    errdefer vertexDefault.destroy();
+    defer vertexDefault.destroy();
     var fragmentDefault = Shader.init("./res/shaders/defaultFrag.glsl", .fragment) catch unreachable;
-    errdefer fragmentDefault.destroy();
+    defer fragmentDefault.destroy();
 
     var vertexLight = Shader.init("./res/shaders/lightVert.glsl", .vertex) catch unreachable;
-    errdefer vertexLight.destroy();
+    defer vertexLight.destroy();
     var fragmentLight = Shader.init("./res/shaders/lightFrag.glsl", .fragment) catch unreachable;
-    errdefer fragmentLight.destroy();
+    defer fragmentLight.destroy();
 
-    const materialLight = Material.init(&vertexDefault, &fragmentDefault);
-    const materialCube = Material.init(&vertexLight, &fragmentLight);
+    const materialLight = Material.init(vertexDefault, fragmentDefault);
+    const materialCube = Material.init(vertexLight, fragmentLight);
 
     var camera = Camera.init(45, .{ 0, 0, 7 });
     camera.mouse.lastX = @as(f32, @floatFromInt(winSize.width)) / 2;
@@ -66,7 +65,6 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
         .camera = camera,
         .cubePos = .{ 0, 0, 0 },
         .lightPos = .{ 0, 0, 0 },
-        .lightColor = .{ 1.0, 1.0, 1.0 },
         .cubeColor = .{ 1.0, 0.5, 0.31 },
         .rotAngle = 0,
     };
@@ -88,7 +86,7 @@ pub fn draw(scene: *Self, dt: f32) void {
     glm.glmc_perspective(glm.glm_rad(scene.fov), aspect, 0.1, 100, &projection);
 
     var lightScale: glm.vec3 = .{ 0.3, 0.3, 0.3 };
-    const lightR, const lightG, const lightB = scene.lightColor;
+    const lightR, const lightG, const lightB, _ = scene.materialLight.color;
 
     scene.geometryLight.bind();
     scene.materialLight.bind();
@@ -135,7 +133,7 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     if (ImGui.enabled) {
         _ = ImGui.c.igBegin("Scene controls", null, 0);
-        _ = ImGui.c.igColorEdit3("Light color", &scene.lightColor, 0);
+        _ = ImGui.c.igColorEdit3("Light color", &scene.materialLight.color, 0);
         _ = ImGui.c.igColorEdit3("Cube color", &scene.cubeColor, 0);
         _ = ImGui.c.igSliderFloat3("Light position", &scene.lightPos, -10, 10);
         ImGui.c.igEnd();

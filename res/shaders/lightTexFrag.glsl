@@ -20,9 +20,9 @@ struct Light {
     vec3 diffuse;
     vec3 specular;
 
-    float constant;
-    float linear;
-    float quadratic;
+    //float constant;
+    //float linear;
+    //float quadratic;
 };
 
 uniform Light light;
@@ -31,6 +31,7 @@ uniform vec3 viewPos;
 
 void main() {
     vec3 ambient = light.ambient * vec3(texture(material.diffuse, v_TexCoords));
+    //color = vec4(vec3(texture(material.diffuse, v_TexCoords)), 1.0);
 
     vec3 norm = normalize(v_Normal);
     vec3 lightDir = normalize(light.position - v_FragPos);
@@ -41,14 +42,15 @@ void main() {
     vec3 reflectDir = reflect(-lightDir, norm);
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
     vec3 specular = light.specular * spec * vec3(texture(material.specular, v_TexCoords));
-
+    
     vec3 emission = vec3(texture(material.emission, v_TexCoords)) * spec;
     if(vec3(texture(material.specular, v_TexCoords)).r != 0.0) {
         emission = vec3(0.0);
     }
 
-    float distance = length(light.position - v_FragPos);
-    float attenuation = 1.0 / (light.constant + light.linear + light.quadratic * pow(distance, 2));
+    //float distance = length(light.position - v_FragPos);
+    //float attenuation = 1.0 / (light.constant + light.linear + light.quadratic * pow(distance, 2));
+    float attenuation = 1.0;
 
     color = vec4((attenuation * (ambient + diffuse + specular) + emission), 1.0);
 };

@@ -31,12 +31,12 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     const geometry = cube.createGeometry(alloc, .{ .texture = true }) catch unreachable;
 
     var vertexShader = Shader.init("./res/shaders/texVert.glsl", .vertex) catch unreachable;
-    errdefer vertexShader.destroy();
+    defer vertexShader.destroy();
 
-    var fragmentShader = Shader.init("./res/shaders/newTexFrag.glsl", .fragment) catch unreachable;
-    errdefer fragmentShader.destroy();
+    var fragmentShader = Shader.init("./res/shaders/texFrag.glsl", .fragment) catch unreachable;
+    defer fragmentShader.destroy();
 
-    var material = Material.init(&vertexShader, &fragmentShader);
+    var material = Material.init(vertexShader, fragmentShader);
 
     const texture = Texture.init(alloc, "./res/textures/sauron_eye.png") catch unreachable;
     errdefer texture.destroy();

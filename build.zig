@@ -73,13 +73,12 @@ pub fn addDepsToExe(b: *std.Build, exe: *std.Build.Step.Compile, target: std.Bui
 
     exe.linkLibC();
     exe.addIncludePath(b.path("vendor/stb_image/"));
-    exe.addCSourceFile(.{ .file = b.path("./vendor/stb_image/stb_imageimpl.c") });
+    exe.addCSourceFile(.{ .file = b.path("./vendor/stb_image/stb_imageimpl.c"), .flags = &[_][]const u8{ "-g", "-O3" } });
     exe.addIncludePath(b.path("vendor/glfw/include"));
     exe.addObjectFile(b.path("vendor/cglm/build/libcglm.a"));
     exe.addIncludePath(b.path("vendor/cglm/include"));
 
-    _ = imgui;
-    if (optimize == .Debug) {
+    if (imgui) {
         const IMGUI_SOURCES = [_][]const u8{
             "vendor/imgui_bindings/generated/dcimgui.cpp",
             "vendor/imgui_bindings/generated/dcimgui_impl_opengl3.cpp",

@@ -4,6 +4,8 @@ const stb = @cImport(@cInclude("stb_image.h"));
 const resLog = @import("utils.zig").scopes.resourceLog;
 const log = std.log;
 
+pub const Error = error{FailedToLoadTexture};
+
 const Self = @This();
 
 allocator: std.mem.Allocator,
@@ -12,7 +14,7 @@ width: c_int = undefined,
 height: c_int = undefined,
 bpp: c_int = undefined,
 
-pub fn init(alloc: std.mem.Allocator, filePath: []const u8) !Self {
+pub fn init(alloc: std.mem.Allocator, filePath: []const u8) Error!Self {
     stb.stbi_set_flip_vertically_on_load(1);
     var result = Self{
         .allocator = alloc,
@@ -21,7 +23,7 @@ pub fn init(alloc: std.mem.Allocator, filePath: []const u8) !Self {
     const buffer = stb.stbi_load(filePath.ptr, @ptrCast(&result.width), @ptrCast(&result.height), @ptrCast(&result.bpp), 4);
     if (buffer == null) {
         resLog.err("Texture '{s}' not found", .{filePath});
-        return error.FileNotFound;
+        return Error.FailedToLoadTexture;
     }
 
     defer stb.stbi_image_free(buffer);

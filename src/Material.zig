@@ -21,17 +21,17 @@ color: glm.vec4 = .{ 1.0, 1.0, 1.0, 1.0 },
 
 shader: ShaderProgram,
 
-pub fn init(vertexShader: *Shader, fragmentShader: *Shader) Self {
+pub fn init(vertexShader: Shader, fragmentShader: Shader) Self {
     var program = ShaderProgram.init();
 
-    program.attachShader(vertexShader.*);
-    program.attachShader(fragmentShader.*);
+    program.attachShader(vertexShader);
+    program.attachShader(fragmentShader);
 
     program.createProgram();
 
     // TODO: delete or keep for different program to use ?
-    vertexShader.destroy();
-    fragmentShader.destroy();
+    //vertexShader.destroy();
+    //fragmentShader.destroy();
 
     return Self{
         .shader = program,
@@ -57,8 +57,10 @@ pub inline fn setTexture(self: *Self, texture: Texture, kind: TextureKind) void 
     }
 }
 
-pub fn bind(self: Self) void {
+pub fn bind(self: *Self) void {
     self.shader.bind();
+
+    self.shader.setUniform4f("u_Color", self.color[0], self.color[1], self.color[2], self.color[3]);
 
     if (self.map) |map|
         map.bind(0);
