@@ -17,7 +17,10 @@ const ModelLoader = @import("../ModelLoader.zig");
 allocator: std.mem.Allocator,
 window: glfw.Window,
 camera: Camera,
-meshes: []Mesh,
+meshes: []*Mesh,
+modelPos: glm.vec3,
+modelRot: f32,
+modelScale: f32,
 fov: f32 = 45,
 
 const Self = @This();
@@ -29,24 +32,11 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 
     const vertexShader = Shader.init("./res/shaders/lightTexVert.glsl", .vertex) catch unreachable;
     const fragmentShader = Shader.init("./res/shaders/lightTexFrag.glsl", .fragment) catch unreachable;
-    //const vertexShader = Shader.init("./res/shaders/defaultFrag.glsl", .vertex) catch unreachable;
-    //const fragmentShader = Shader.init("./res/shaders/defaultVert.glsl", .fragment) catch unreachable;
 
     var loader = ModelLoader.init(alloc);
     defer loader.destroy();
-    //const meshes = loader.loadFromFile("res/models/backpack/backpack.obj", vertexShader, fragmentShader) catch unreachable;
-    const meshes = loader.loadFromFile("res/models/sword/source/SwordLow_UV.fbx", vertexShader, fragmentShader) catch unreachable;
+    const meshes = loader.loadFromFile("res/models/backpack/backpack.obj", vertexShader, fragmentShader) catch unreachable;
     //const meshes = loader.loadFromFile("res/models/suzzane.obj", vertexShader, fragmentShader) catch unreachable;
-
-    //const geometry = cube.createGeometry(alloc, .{ .texture = true }) catch unreachable;
-
-    //var vertexShader = Shader.init("./res/shaders/lightVert.glsl", .vertex) catch unreachable;
-    //errdefer vertexShader.destroy();
-
-    //var fragmentShader = Shader.init("./res/shaders/lightFrag.glsl", .fragment) catch unreachable;
-    //errdefer fragmentShader.destroy();
-
-    //const material = Material.init(&vertexShader, &fragmentShader);
 
     var camera = Camera.init(45, .{ 0, 0, 20 });
     camera.mouse.lastX = @as(f32, @floatFromInt(winSize.width)) / 2;
@@ -57,34 +47,31 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
         .window = win,
         .camera = camera,
         .meshes = meshes,
+        .modelPos = .{ 0, 0, 0 },
+        .modelRot = 0,
+        .modelScale = 1,
     };
 }
 
 pub fn draw(scene: *Self, dt: f32) void {
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
-    _ = dt;
 
-    //scene.material.bind();
     var winSize = scene.window.getFramebufferSize();
     scene.camera.updateViewMatrix();
 
-    var model: glm.mat4 = undefined;
     var projection: glm.mat4 = undefined;
     const aspect: f32 = @as(f32, @floatFromInt(winSize.width)) / @as(f32, @floatFromInt(winSize.height));
-
     glm.glmc_perspective(glm.glm_rad(scene.fov), aspect, 0.1, 100, &projection);
-    glm.glmc_mat4_identity(&model);
 
-    for (scene.meshes) |*mesh| {
-        mesh.material.bind();
-        mesh.material.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
-        mesh.material.shader.setUniformMat4f("projection", projection);
-        mesh.material.shader.setUniformMat4f("model", model);
+    scene.meshes[0].position = scene.modelPos;
+    scene.meshes[0].rotation = .{ scene.modelRot / 1000, 0, 0 };
+    scene.meshes[0].scale = .{ scene.modelScale, scene.modelScale, scene.modelScale };
 
-        //const objectR, const objectG, const objectB, _ = mesh.material.color;
-        //mesh.material.shader.setUniform3f("material.ambient", objectR, objectG, objectB);
-        //mesh.material.shader.setUniform3f("material.diffuse", objectR, objectG, objectB);
-        //mesh.material.shader.setUniform3f("material.specular", 0.5, 0.5, 0.5);
+    for (scene.meshes) |mesh| {
+        mesh.bind();
+        mesh.setViewMatrix(scene.camera.getViewMatrix());
+        mesh.setProjectionMatrix(projection);
+        mesh.updateModelMatrix();
         mesh.material.shader.setUniform1f("material.shininess", 32);
 
         var lightPos: glm.vec3 = .{ 1.0, 0.5, 1.0 };
@@ -97,20 +84,23 @@ pub fn draw(scene: *Self, dt: f32) void {
         mesh.material.shader.setUniform3f("light.diffuse", 0.5, 0.5, 0.5);
         mesh.material.shader.setUniform3f("light.specular", 1.0, 1.0, 1.0);
 
-        mesh.geometry.bind();
         Renderer.draw(mesh.geometry.vertexArray, mesh.geometry.indexBuffer, mesh.material.shader);
+
+        scene.modelRot += 3 * dt;
     }
 
-    if (ImGui.enabled)
-        scene.camera.imGuiDebugWindow();
+    if (ImGui.enabled) {
+        _ = ImGui.c.igBegin("Scene controls", null, 0);
+        _ = ImGui.c.igSliderFloat3("Model position", &scene.modelPos, -10, 10);
+        _ = ImGui.c.igSliderFloat("Model scale", &scene.modelScale, -10, 10);
+        ImGui.c.igEnd();
+    }
 
     winSize = scene.window.getFramebufferSize();
 }
 
 pub fn destroy(scene: *Self) void {
-    //scene.geometry.destroy();
-    //scene.material.destroy();
-    _ = scene;
+    scene.meshes[0].destroy();
 }
 
 pub fn onSceneReentry(scene: *Self) void {

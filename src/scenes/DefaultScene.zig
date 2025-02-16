@@ -7,6 +7,7 @@ const Texture = @import("../Texture.zig");
 const Camera = @import("../Camera.zig");
 const Geometry = @import("../Geometry.zig");
 const Material = @import("../Material.zig");
+const Mesh = @import("../Mesh.zig");
 const Shader = @import("../Shader.zig");
 const Renderer = @import("../Renderer.zig");
 const glm = @import("../glm.zig");
@@ -16,8 +17,7 @@ allocator: std.mem.Allocator,
 window: glfw.Window,
 camera: Camera,
 poses: [6]glm.vec3,
-geometry: Geometry,
-material: Material,
+mesh: Mesh,
 fov: f32 = 45,
 rotAngle: f32 = 0.0,
 
@@ -43,6 +43,8 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 
     material.setTexture(texture, .color);
 
+    const mesh = Mesh.init(alloc, geometry, material);
+
     //TODO: ????
     //errdefer material.destroy();
 
@@ -64,8 +66,7 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
         .allocator = alloc,
         .window = win,
         .camera = camera,
-        .geometry = geometry,
-        .material = material,
+        .mesh = mesh,
         .poses = poses,
     };
 }
@@ -73,29 +74,23 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
 pub fn draw(scene: *Self, dt: f32) void {
     Renderer.setClearColor(0.2, 0.4, 0.4, 1.0);
 
-    scene.material.bind();
-    scene.geometry.bind();
+    scene.mesh.bind();
     var winSize = scene.window.getFramebufferSize();
     scene.camera.updateViewMatrix();
 
-    var model: glm.mat4 = undefined;
     var projection: glm.mat4 = undefined;
-
-    var rotAxis: glm.vec3 = .{ 1, 1, 1 };
-
     const aspect: f32 = @as(f32, @floatFromInt(winSize.width)) / @as(f32, @floatFromInt(winSize.height));
     glm.glmc_perspective(glm.glm_rad(scene.fov), aspect, 0.1, 100, &projection);
 
-    scene.material.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
-    scene.material.shader.setUniformMat4f("projection", projection);
+    scene.mesh.setViewMatrix(scene.camera.getViewMatrix());
+    scene.mesh.setProjectionMatrix(projection);
 
     for (0..5) |i| {
-        glm.glmc_mat4_identity(&model);
-        glm.glmc_translate(&model, &scene.poses[i]);
-        glm.glmc_rotate(&model, scene.rotAngle - @as(f32, @floatFromInt(i * 3)), &rotAxis);
-        scene.material.shader.setUniformMat4f("model", model);
+        scene.mesh.position = scene.poses[i];
+        scene.mesh.rotation = .{ scene.rotAngle - @as(f32, @floatFromInt(i * 3)), 0, 0 };
+        scene.mesh.updateModelMatrix();
 
-        Renderer.draw(scene.geometry.vertexArray, scene.geometry.indexBuffer, scene.material.shader);
+        Renderer.draw(scene.mesh.geometry.vertexArray, scene.mesh.geometry.indexBuffer, scene.mesh.material.shader);
     }
 
     scene.rotAngle += 3 * dt;
@@ -107,8 +102,7 @@ pub fn draw(scene: *Self, dt: f32) void {
 }
 
 pub fn destroy(scene: *Self) void {
-    scene.geometry.destroy();
-    scene.material.destroy();
+    scene.mesh.destroy();
 }
 
 pub fn onSceneReentry(scene: *Self) void {

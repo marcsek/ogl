@@ -81,3 +81,12 @@ pub fn glDebugOutput(source: c_uint, debugType: c_uint, id: c_uint, severity: c_
 pub fn glfwErrorCallback(error_code: glfw.ErrorCode, description: [:0]const u8) void {
     scopes.glfwLog.err("{}: {s}", .{ error_code, description });
 }
+
+pub fn splitDirAndFile(filePath: []const u8) struct { []const u8, []const u8 } {
+    const index = std.mem.lastIndexOf(u8, filePath, "/");
+
+    if (index) |i|
+        return .{ filePath[0 .. i + 1], filePath[i + 1 ..] };
+
+    return .{ "", filePath };
+}

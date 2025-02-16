@@ -11,6 +11,7 @@ const ImGui = @import("../imgui.zig");
 const Geometry = @import("../Geometry.zig");
 const Shader = @import("../Shader.zig");
 const Material = @import("../Material.zig");
+const Mesh = @import("../Mesh.zig");
 const Renderer = @import("../Renderer.zig");
 const glm = @import("../glm.zig");
 const cube = @import("../shapes.zig").cube;
@@ -18,10 +19,8 @@ const cube = @import("../shapes.zig").cube;
 allocator: std.mem.Allocator,
 window: glfw.Window,
 camera: Camera,
-geometryCube: Geometry,
-geometryLight: Geometry,
-materialCube: Material,
-materialLight: Material,
+meshCube: *Mesh,
+meshLight: *Mesh,
 fov: f32 = 45,
 cubePos: glm.vec3,
 lightPos: glm.vec3,
@@ -51,6 +50,13 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     const materialLight = Material.init(vertexDefault, fragmentDefault);
     const materialCube = Material.init(vertexLight, fragmentLight);
 
+    var meshCube = alloc.create(Mesh) catch unreachable;
+    meshCube.* = Mesh.init(alloc, geometryCube, materialCube);
+    var meshLight = alloc.create(Mesh) catch unreachable;
+    meshLight.* = Mesh.init(alloc, geometryLight, materialLight);
+    meshLight.scale = .{ 0.3, 0.3, 0.3 };
+    meshCube.addChild(meshLight) catch unreachable;
+
     var camera = Camera.init(45, .{ 0, 0, 7 });
     camera.mouse.lastX = @as(f32, @floatFromInt(winSize.width)) / 2;
     camera.mouse.lastY = @as(f32, @floatFromInt(winSize.height)) / 2;
@@ -58,10 +64,8 @@ pub fn init(alloc: std.mem.Allocator, win: glfw.Window) Self {
     return Self{
         .allocator = alloc,
         .window = win,
-        .geometryCube = geometryCube,
-        .geometryLight = geometryLight,
-        .materialCube = materialCube,
-        .materialLight = materialLight,
+        .meshCube = meshCube,
+        .meshLight = meshLight,
         .camera = camera,
         .cubePos = .{ 0, 0, 0 },
         .lightPos = .{ 0, 0, 0 },
@@ -77,65 +81,75 @@ pub fn draw(scene: *Self, dt: f32) void {
 
     scene.camera.updateViewMatrix();
 
-    var model: glm.mat4 = undefined;
     var projection: glm.mat4 = undefined;
-
-    var rotAxis: glm.vec3 = .{ 1, 1, 1 };
 
     const aspect: f32 = @as(f32, @floatFromInt(winSize.width)) / @as(f32, @floatFromInt(winSize.height));
     glm.glmc_perspective(glm.glm_rad(scene.fov), aspect, 0.1, 100, &projection);
 
-    var lightScale: glm.vec3 = .{ 0.3, 0.3, 0.3 };
-    const lightR, const lightG, const lightB, _ = scene.materialLight.color;
-
-    scene.geometryLight.bind();
-    scene.materialLight.bind();
-    scene.materialLight.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
-    scene.materialLight.shader.setUniformMat4f("projection", projection);
-    scene.lightPos[0] = @sin(scene.rotAngle / 4) * 2;
-    scene.lightPos[1] = @cos(scene.rotAngle / 4) * 2;
-    scene.lightPos[2] = @sin(scene.rotAngle / 2) * 1;
-    glm.glmc_mat4_identity(&model);
-    glm.glmc_translate(&model, &scene.lightPos);
-    glm.glmc_scale(&model, &lightScale);
+    //var lightScale: glm.vec3 = .{ 0.3, 0.3, 0.3 };
+    const lightR, const lightG, const lightB, _ = scene.meshLight.material.color;
+    scene.meshLight.bind();
+    //scene.geometryLight.bind();
+    //scene.materialLight.bind();
+    scene.meshLight.setViewMatrix(scene.camera.getViewMatrix());
+    scene.meshLight.setProjectionMatrix(projection);
+    //scene.materialLight.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
+    //scene.materialLight.shader.setUniformMat4f("projection", projection);
+    //scene.lightPos[0] = @sin(scene.rotAngle / 4) * 2;
+    //scene.lightPos[1] = @cos(scene.rotAngle / 4) * 2;
+    //scene.lightPos[2] = @sin(scene.rotAngle / 2) * 1;
+    scene.lightPos = .{ 1.2, 1.2, 1.2 };
+    scene.meshLight.position = scene.lightPos;
+    //scene.meshLight.rotation = .{ glm.glm_rad(scene.rotAngle) * 100, 0, 0 };
+    scene.meshLight.updateModelMatrix();
+    //glm.glmc_mat4_identity(&model);
+    //glm.glmc_translate(&model, &scene.lightPos);
+    //glm.glmc_scale(&model, &lightScale);
     //glm.glmc_rotate(&model, 0, &rotAxis);
-    scene.materialLight.shader.setUniformMat4f("model", model);
-    scene.materialLight.shader.setUniform3f("lightColor", lightR, lightG, lightB);
-    Renderer.draw(scene.geometryLight.vertexArray, scene.geometryLight.indexBuffer, scene.materialLight.shader);
+    //scene.materialLight.shader.setUniformMat4f("model", model);
+    scene.meshLight.material.shader.setUniform3f("lightColor", lightR, lightG, lightB);
+    //scene.materialLight.shader.setUniform3f("lightColor", lightR, lightG, lightB);
+    Renderer.draw(scene.meshLight.geometry.vertexArray, scene.meshLight.geometry.indexBuffer, scene.meshLight.material.shader);
 
-    scene.geometryCube.bind();
-    scene.materialCube.bind();
-    scene.materialCube.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
-    scene.materialCube.shader.setUniformMat4f("projection", projection);
-    glm.glmc_mat4_identity(&model);
-    glm.glmc_translate(&model, &scene.cubePos);
-    glm.glmc_rotate(&model, 0 * glm.glm_rad(scene.rotAngle), &rotAxis);
-    scene.materialCube.shader.setUniformMat4f("model", model);
+    //scene.geometryCube.bind();
+    //scene.materialCube.bind();
+    scene.meshCube.bind();
+    scene.meshCube.setViewMatrix(scene.camera.getViewMatrix());
+    scene.meshCube.setProjectionMatrix(projection);
+    //scene.materialCube.shader.setUniformMat4f("view", scene.camera.getViewMatrix());
+    //scene.materialCube.shader.setUniformMat4f("projection", projection);
+    scene.meshCube.position = scene.cubePos;
+    scene.meshCube.rotation = .{ glm.glm_rad(scene.rotAngle) * 10, 0, 0 };
+    //glm.glmc_mat4_identity(&model);
+    //glm.glmc_translate(&model, &scene.cubePos);
+    //glm.glmc_rotate(&model, glm.glm_rad(scene.rotAngle), &rotAxis);
+    //scene.materialCube.shader.setUniformMat4f("model", model);
+    scene.meshCube.updateModelMatrix();
 
     const objectR, const objectG, const objectB = scene.cubeColor;
-    scene.materialCube.shader.setUniform3f("material.ambient", objectR, objectG, objectB);
-    scene.materialCube.shader.setUniform3f("material.diffuse", objectR, objectG, objectB);
-    scene.materialCube.shader.setUniform3f("material.specular", 0.5, 0.5, 0.5);
-    scene.materialCube.shader.setUniform1f("material.shininess", 32);
-
     var lightPosView: glm.vec3 = undefined;
     var viewMatrix: glm.mat4 = scene.camera.getViewMatrix();
     glm.glmc_mat4_mulv3(&viewMatrix, &scene.lightPos, 1.0, &lightPosView);
 
-    scene.materialCube.shader.setUniform3f("light.position", lightPosView[0], lightPosView[1], lightPosView[2]);
-    scene.materialCube.shader.setUniform3f("light.ambient", lightR * 0.2, lightG * 0.2, lightB * 0.2);
-    scene.materialCube.shader.setUniform3f("light.diffuse", lightR * 0.5, lightG * 0.5, lightB * 0.5);
-    scene.materialCube.shader.setUniform3f("light.specular", lightR, lightG, lightB);
+    scene.meshCube.material.shader.setUniform3f("light.position", lightPosView[0], lightPosView[1], lightPosView[2]);
+    scene.meshCube.material.shader.setUniform3f("light.ambient", lightR * 0.2, lightG * 0.2, lightB * 0.2);
+    scene.meshCube.material.shader.setUniform3f("light.diffuse", lightR * 0.5, lightG * 0.5, lightB * 0.5);
+    scene.meshCube.material.shader.setUniform3f("light.specular", lightR, lightG, lightB);
 
-    Renderer.draw(scene.geometryCube.vertexArray, scene.geometryLight.indexBuffer, scene.materialCube.shader);
+    scene.meshCube.material.shader.setUniform3f("material.ambient", objectR, objectG, objectB);
+    scene.meshCube.material.shader.setUniform3f("material.diffuse", objectR, objectG, objectB);
+    scene.meshCube.material.shader.setUniform3f("material.specular", 0.5, 0.5, 0.5);
+    scene.meshCube.material.shader.setUniform1f("material.shininess", 32);
+    Renderer.draw(scene.meshCube.geometry.vertexArray, scene.meshCube.geometry.indexBuffer, scene.meshCube.material.shader);
 
     scene.rotAngle += 3 * dt;
 
     if (ImGui.enabled) {
         _ = ImGui.c.igBegin("Scene controls", null, 0);
-        _ = ImGui.c.igColorEdit3("Light color", &scene.materialLight.color, 0);
+        _ = ImGui.c.igColorEdit3("Light color", &scene.meshLight.material.color, 0);
         _ = ImGui.c.igColorEdit3("Cube color", &scene.cubeColor, 0);
         _ = ImGui.c.igSliderFloat3("Light position", &scene.lightPos, -10, 10);
+        _ = ImGui.c.igSliderFloat3("Cube position", &scene.cubePos, -10, 10);
         ImGui.c.igEnd();
     }
 
@@ -143,10 +157,12 @@ pub fn draw(scene: *Self, dt: f32) void {
 }
 
 pub fn destroy(scene: *Self) void {
-    scene.geometryCube.destroy();
-    scene.geometryLight.destroy();
-    scene.materialCube.destroy();
-    scene.materialLight.destroy();
+    scene.meshCube.destroy();
+    //scene.meshLight.destroy();
+    //scene.geometryCube.destroy();
+    //scene.geometryLight.destroy();
+    //scene.materialCube.destroy();
+    //scene.materialLight.destroy();
 }
 
 pub fn onSceneReentry(scene: *Self) void {

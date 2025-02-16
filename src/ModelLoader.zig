@@ -4,7 +4,8 @@ const assimp = @cImport({
     @cInclude("assimp/scene.h");
     @cInclude("assimp/postprocess.h");
 });
-const log = @import("utils.zig").scopes.resourceLog;
+const utils = @import("utils.zig");
+const log = utils.scopes.resourceLog;
 const Geometry = @import("Geometry.zig");
 const Texture = @import("Texture.zig");
 const Material = @import("Material.zig");
@@ -30,7 +31,7 @@ pub fn loadFromFile(
     filePath: []const u8,
     vertexShader: Shader,
     fragmentShader: Shader,
-) Error![]Mesh {
+) Error![]*Mesh {
     var time = std.time.Timer.start() catch unreachable;
 
     const scene = assimp.aiImportFile(filePath.ptr, assimp.aiProcess_Triangulate | assimp.aiProcess_FlipUVs);
@@ -41,9 +42,15 @@ pub fn loadFromFile(
         return Error.FailedToImport;
     }
 
-    var meshes = try ArrayList(Mesh).initCapacity(self.allocator, scene.*.mNumMeshes);
+    const directory, _ = utils.splitDirAndFile(filePath);
 
-    try self.processNode(scene.*.mRootNode, scene, "./res/models/sword/textures", vertexShader, fragmentShader, &meshes);
+    var meshes = try ArrayList(*Mesh).initCapacity(self.allocator, scene.*.mNumMeshes);
+    try self.processNode(scene.*.mRootNode, scene, directory, vertexShader, fragmentShader, &meshes);
+
+    // TODO: Do properly
+    for (meshes.items[1..]) |mesh| {
+        try meshes.items[0].addChild(mesh);
+    }
 
     const totalTime: f64 = @as(f64, @floatFromInt(time.lap())) / 1_000_000_000.0;
     log.info("Model loaded in {d:.5} sec.", .{totalTime});
@@ -62,7 +69,7 @@ fn processNode(
     directory: []const u8,
     vs: Shader,
     fs: Shader,
-    result: *ArrayList(Mesh),
+    result: *ArrayList(*Mesh),
 ) Error!void {
     for (0..node.mNumMeshes) |i| {
         const mesh = scene.mMeshes[node.mMeshes[i]];
@@ -73,7 +80,9 @@ fn processNode(
         var material = try self.createMaterial(scene, mesh.*.mMaterialIndex, directory, vs, fs);
         errdefer material.destroy();
 
-        result.appendAssumeCapacity(Mesh.init(geometry, material));
+        const newMesh = try self.allocator.create(Mesh);
+        newMesh.* = Mesh.init(self.allocator, geometry, material);
+        result.appendAssumeCapacity(newMesh);
     }
 
     for (0..node.mNumChildren) |i|
